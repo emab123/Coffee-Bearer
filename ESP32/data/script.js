@@ -1,4 +1,3 @@
-<script>
         async function atualizarStatus() {
             try {
                 const response = await fetch('/api/status');
@@ -135,4 +134,3 @@
             atualizarStatus();
             listarUsuarios();
         });
-    </script>
