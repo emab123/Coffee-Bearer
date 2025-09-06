@@ -19,7 +19,7 @@ Gerenciamento completo via navegador web
 #define RST_PIN 4
 #define SS_PIN 5
 #define BUZZER_PIN 15
-#define RELAY_PIN 13 // Alterado do pino 2 para 13 para evitar conflitos
+#define RELAY_PIN 13 
 
 // ============== CONFIGURAÇÕES DO SISTEMA ==============
 #define MAX_USUARIOS 50
@@ -27,8 +27,8 @@ Gerenciamento completo via navegador web
 #define TEMPO_CAFE_MS 5000
 
 // ============== CONFIGURAÇÕES WIFI ==============
-const char* ssid = "Gergelim"; // Altere para sua rede
-const char* password = "32414451"; // Altere para sua senha
+const char* ssid = "SUAREDE"; // Altere para sua rede
+const char* password = "SUASENHA"; // Altere para sua senha
 
 // ============== VARIÁVEIS GLOBAIS ==============
 MFRC522 mfrc522(SS_PIN, RST_PIN);
