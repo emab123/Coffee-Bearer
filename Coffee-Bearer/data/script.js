@@ -33,10 +33,14 @@
                     data.usuarios.forEach(usuario => {
                         const userDiv = document.createElement('div');
                         userDiv.className = 'usuario-item';
+                            // Dentro da função listarUsuarios, no forEach:
                         userDiv.innerHTML = `
                             <div class="usuario-info">
                                 <div class="usuario-nome">${usuario.nome}</div>
                                 <div class="usuario-uid">${usuario.uid}</div>
+                            </div>
+                            <div class="usuario-creditos">
+                                <strong>${usuario.creditos}</strong> créditos
                             </div>
                             <button class="btn btn-danger" onclick="removerUsuario('${usuario.uid}')">Remover</button>`;
                         listaDiv.appendChild(userDiv);
@@ -96,7 +100,7 @@
         }
         
         async function confirmarLimpeza() {
-            const confirmacao = prompt('ATENÇÃO: Isso apagará TODOS os dados!\\n\\nPara confirmar, digite: LIMPAR TUDO');
+            const confirmacao = prompt('ATENÇÃO: Isso apagará TODOS os dados! Para confirmar, digite: LIMPAR TUDO');
             if (confirmacao !== 'LIMPAR TUDO') { alert('Operação cancelada'); return; }
             try {
                 const response = await fetch('/api/limpar-dados', { method: 'DELETE' });
