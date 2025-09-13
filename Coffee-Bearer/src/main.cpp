@@ -53,7 +53,6 @@ void initializeSystem() {
     // Inicializar SPIFFS primeiro
     if (!SPIFFS.begin(true)) {
         Serial.println(F("ERRO FATAL: Falha ao montar SPIFFS"));
-        ledController.setError();
         while(1) {
             ledController.update();
             delay(100);
@@ -62,7 +61,6 @@ void initializeSystem() {
     
     // Inicializar componentes
     ledController.begin();
-    ledController.setInitializing();
     
     logger.begin();
     logger.info("Sistema iniciando...");
@@ -83,7 +81,7 @@ void initializeSystem() {
     timeClient.update();
     
     systemInitialized = true;
-    ledController.setReady();
+    ledController.showStatusOK();
     
     logger.info("Sistema iniciado com sucesso");
     Serial.print(F("Sistema pronto! Acesse: http://"));
@@ -93,7 +91,6 @@ void initializeSystem() {
 }
 
 void connectWiFi() {
-    ledController.setConnecting();
     
     Serial.printf("Conectando ao WiFi: %s\n", WIFI_SSID);
     WiFi.mode(WIFI_STA);
@@ -301,21 +298,19 @@ void checkWeeklyReset() {
 }
 
 void updateSystemStatus() {
-    if (millis() - lastStatusUpdate < 1000) return; // Atualiza a cada segundo
-    lastStatusUpdate = millis();
-    
-    // Atualizar LED baseado no status
-    if (coffeeController.isBusy()) {
-        ledController.setServing();
-    } else if (coffeeController.getRemainingCoffees() <= 0) {
-        ledController.setEmpty();
-    } else if (WiFi.status() != WL_CONNECTED) {
-        ledController.setError();
-    } else {
-        ledController.setReady();
+    // Esta função define a cor de fundo se NENHUMA animação estiver acontecendo.
+    // A prioridade é mostrar se o café está vazio
+    if (coffeeController.isEmpty()) {
+        ledController.showStatusEmpty();
+    } 
+    // Depois, se está acabando (ex: menos de 5 cafés)
+    else if (coffeeController.getRemainingCoffees() < 5) {
+        ledController.showStatusLow();
     }
-    
-    ledController.update();
+    // Se não, tudo OK
+    else {
+        ledController.showStatusOK();
+    }
 }
 
 void handleWiFiReconnection() {
@@ -352,10 +347,12 @@ void loop() {
     
     // Atualizar status do sistema
     updateSystemStatus();
-    
+
     // Gerenciar reconexão WiFi
     handleWiFiReconnection();
     
+    ledController.update(); 
+
     // Atualizar NTP periodicamente
     static unsigned long lastNTPUpdate = 0;
     if (millis() - lastNTPUpdate > 3600000) { // A cada hora
@@ -363,6 +360,4 @@ void loop() {
         lastNTPUpdate = millis();
     }
     
-    // Pequeno delay para não sobrecarregar
-    delay(50);
 }

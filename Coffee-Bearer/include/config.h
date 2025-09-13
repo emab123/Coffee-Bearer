@@ -12,7 +12,7 @@ CONFIGURAÇÕES CENTRALIZADAS DO SISTEMA
 #define SYSTEM_VERSION "4.0.0"
 #define SYSTEM_NAME "Cafeteira RFID Inteligente"
 
-// ============== CONFIGURAÇÕES DE HARDWARE ==============
+// ============== CONFIGURAÇÕES DE HARDWARE =============
 // Pinos RFID
 #define RFID_RST_PIN 4
 #define RFID_SS_PIN 5
@@ -20,8 +20,8 @@ CONFIGURAÇÕES CENTRALIZADAS DO SISTEMA
 // Pinos de controle
 #define BUZZER_PIN 15
 #define RELAY_PIN 13
-#define NEOPIXEL_PIN 2
-#define NEOPIXEL_COUNT 8
+#define NEOPIXEL_PIN 34 // <-- PINO ALTERADO PARA D34
+#define NEOPIXEL_COUNT 1 // <-- GARANTIR QUE ESTEJA EM 1
 
 // ============== CONFIGURAÇÕES DE REDE ==============
 // Definidas em credentials.h
@@ -90,17 +90,6 @@ enum LogLevel {
 #else
     #define DEBUG_LOG_LEVEL LOG_INFO
 #endif
-
-// ============== CONFIGURAÇÕES DE LED NEOPIXEL ==============
-// Cores (formato RGB)
-#define COLOR_OFF           0x000000
-#define COLOR_READY         0x00FF00  // Verde
-#define COLOR_SERVING       0xFFFF00  // Amarelo
-#define COLOR_ERROR         0xFF0000  // Vermelho
-#define COLOR_EMPTY         0xFF8000  // Laranja
-#define COLOR_CONNECTING    0x0000FF  // Azul
-#define COLOR_INITIALIZING  0x8000FF  // Roxo
-#define COLOR_SUCCESS       0x00FFFF  // Ciano
 
 // Padrões de animação
 #define LED_ANIMATION_SPEED 100  // ms entre frames
