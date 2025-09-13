@@ -86,7 +86,8 @@ void initializeSystem() {
     ledController.setReady();
     
     logger.info("Sistema iniciado com sucesso");
-    Serial.println(F("Sistema pronto! Acesse: http://") + WiFi.localIP().toString());
+    Serial.print(F("Sistema pronto! Acesse: http://"));
+    Serial.println(WiFi.localIP());
     Serial.println(F("Digite 'help' para comandos disponíveis"));
     Serial.println(F("=================================================="));
 }
