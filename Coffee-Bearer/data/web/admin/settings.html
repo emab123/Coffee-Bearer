@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configurações - Cafeteira RFID</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="app-title">
+                <div class="coffee-icon">☕</div>
+                <div>
+                    <h1>Cafeteira RFID - Admin</h1>
+                    <p class="version">Configurações do Sistema v4.0</p>
+                </div>
+            </div>
+            <div class="user-info">
+                <div class="user-avatar">A</div>
+                <div>
+                    <div class="user-name">Administrador</div>
+                    <div class="user-role">Admin</div>
+                </div>
+                <button class="logout-btn" onclick="logout()">Sair</button>
+            </div>
+        </header>
+
+        <nav class="app-nav">
+            <ul class="nav-tabs">
+                <li class="nav-tab"><a href="/admin/dashboard">Dashboard</a></li>
+                <li class="nav-tab"><a href="/admin/users">Usuários</a></li>
+                <li class="nav-tab active"><a href="/admin/settings">Configurações</a></li>
+                <li class="nav-tab"><a href="/admin/logs">Logs</a></li>
+                <li class="nav-tab"><a href="/admin/stats">Estatísticas</a></li>
+            </ul>
+        </nav>
+
+        <main class="app-main">
+            <!-- Sistema de Alertas -->
+            <div id="alertContainer"></div>
+
+            <!-- Configurações de Autenticação -->
+            <section class="auth-settings">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">🔐 Configurações de Autenticação</h3>
+                    </div>
+                    <form id="authSettingsForm" class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label" for="adminUsername">Usuário Admin</label>
+                            <input type="text" id="adminUsername" class="form-input" placeholder="admin" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="adminPassword">Nova Senha Admin</label>
+                            <input type="password" id="adminPassword" class="form-input" placeholder="Deixe em branco para manter">
+                            <small class="form-help">Mínimo 6 caracteres</small>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="adminPasswordConfirm">Confirmar Nova Senha</label>
+                            <input type="password" id="adminPasswordConfirm" class="form-input" placeholder="Confirme a nova senha">
+                        </div>
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary">
+                                💾 Salvar Credenciais Admin
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Configurações da Cafeteira -->
+            <section class="coffee-settings">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">☕ Configurações da Cafeteira</h3>
+                    </div>
+                    <form id="coffeeSettingsForm" class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label" for="maxCoffees">Capacidade Máxima</label>
+                            <input type="number" id="maxCoffees" class="form-input" min="10" max="500" value="100">
+                            <small class="form-help">Número máximo de cafés no recipiente</small>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="currentCoffees">Cafés Atuais</label>
+                            <input type="number" id="currentCoffees" class="form-input" min="0" max="500">
+                            <small class="form-help">Quantidade atual de cafés disponíveis</small>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="serveTime">Tempo de Preparo (segundos)</label>
+                            <input type="number" id="serveTime" class="form-input" min="3" max="30" value="8">
+                            <small class="form-help">Tempo que o relé ficará ativo</small>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="cooldownTime">Cooldown (segundos)</label>
+                            <input type="number" id="cooldownTime" class="form-input" min="1" max="10" value="3">
+                            <small class="form-help">Tempo de espera entre leituras RFID</small>
+                        </div>
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary">
+                                ⚙️ Salvar Configurações
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="resetCoffeeSettings()">
+                                🔄 Restaurar Padrão
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Configurações de Usuários -->
+            <section class="user-settings">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">👥 Configurações de Usuários</h3>
+                    </div>
+                    <form id="userSettingsForm" class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label" for="initialCredits">Créditos Iniciais</label>
+                            <input type="number" id="initialCredits" class="form-input" min="1" max="50" value="10">
+                            <small class="form-help">Créditos dados a novos usuários</small>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="maxUsers">Máximo de Usuários</label>
+                            <input type="number" id="maxUsers" class="form-input" min="10" max="200" value="50">
+                            <small class="form-help">Limite máximo de usuários cadastrados</small>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">
+                                <input type="checkbox" id="weeklyReset"> Reset Semanal Automático
+                            </label>
+                            <small class="form-help">Restaurar créditos automaticamente toda semana</small>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="resetDay">Dia do Reset</label>
+                            <select id="resetDay" class="form-select">
+                                <option value="0">Domingo</option>
+                                <option value="1" selected>Segunda-feira</option>
+                                <option value="2">Terça-feira</option>
+                                <option value="3">Quarta-feira</option>
+                                <option value="4">Quinta-feira</option>
+                                <option value="5">Sexta-feira</option>
+                                <option value="6">Sábado</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary">
+                                💾 Salvar Configurações
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Configurações de Sistema -->
+            <section class="system-settings">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">🖥️ Configurações do Sistema</h3>
+                    </div>
+                    <div class="settings-group">
+                        <!-- LED Settings -->
+                        <div class="form-group">
+                            <label class="form-label" for="ledBrightness">Brilho do LED (%)</label>
+                            <input type="range" id="ledBrightness" min="10" max="100" value="50" 
+                                   oninput="updateLEDBrightness(this.value)">
+                            <span id="brightnessValue">50%</span>
+                        </div>
+
+                        <!-- Audio Settings -->
+                        <div class="form-group">
+                            <label class="form-label">
+                                <input type="checkbox" id="audioEnabled" checked> Sons Habilitados
+                            </label>
+                        </div>
+
+                        <!-- Log Settings -->
+                        <div class="form-group">
+                            <label class="form-label" for="logLevel">Nível de Log</label>
+                            <select id="logLevel" class="form-select">
+                                <option value="0">Debug</option>
+                                <option value="1" selected>Info</option>
+                                <option value="2">Warning</option>
+                                <option value="3">Error</option>
+                                <option value="4">Critical</option>
+                            </select>
+                        </div>
+
+                        <!-- Time Settings -->
+                        <div class="form-group">
+                            <label class="form-label" for="timezone">Fuso Horário</label>
+                            <select id="timezone" class="form-select">
+                                <option value="-12">GMT-12</option>
+                                <option value="-11">GMT-11</option>
+                                <option value="-10">GMT-10</option>
+                                <option value="-9">GMT-9</option>
+                                <option value="-8">GMT-8</option>
+                                <option value="-7">GMT-7</option>
+                                <option value="-6">GMT-6</option>
+                                <option value="-5">GMT-5</option>
+                                <option value="-4">GMT-4</option>
+                                <option value="-3" selected>GMT-3 (Brasília)</option>
+                                <option value="-2">GMT-2</option>
+                                <option value="-1">GMT-1</option>
+                                <option value="0">GMT (UTC)</option>
+                                <option value="1">GMT+1</option>
+                                <option value="2">GMT+2</option>
+                                <option value="3">GMT+3</option>
+                                <option value="4">GMT+4</option>
+                                <option value="5">GMT+5</option>
+                                <option value="6">GMT+6</option>
+                                <option value="7">GMT+7</option>
+                                <option value="8">GMT+8</option>
+                                <option value="9">GMT+9</option>
+                                <option value="10">GMT+10</option>
+                                <option value="11">GMT+11</option>
+                                <option value="12">GMT+12</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <button class="btn btn-primary" onclick="saveSystemSettings()">
+                                💾 Salvar Configurações
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Ações de Sistema -->
+            <section class="system-actions">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">🔧 Ações do Sistema</h3>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-info" onclick="testCoffeeSystem()">
+                            ☕ Testar Sistema
+                        </button>
+                        <button class="btn btn-warning" onclick="restartSystem()">
+                            🔄 Reiniciar Sistema
+                        </button>
+                        <button class="btn btn-secondary" onclick="backupData()">
+                            💾 Backup dos Dados
+                        </button>
+                        <button class="btn btn-secondary" onclick="showRestoreDialog()">
+                            📂 Restaurar Backup
+                        </button>
+                        <button class="btn btn-danger" onclick="factoryReset()">
+                            ⚠️ Reset de Fábrica
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Informações do Sistema -->
+            <section class="system-info">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">ℹ️ Informações do Sistema</h3>
+                    </div>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <label>Versão do Firmware:</label>
+                            <span id="firmwareVersion">4.0.0</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Uptime:</label>
+                            <span id="systemUptime">Carregando...</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Memória Livre:</label>
+                            <span id="freeMemory">Carregando...</span>
+                        </div>
+                        <div class="info-item">
+                            <label>WiFi:</label>
+                            <span id="wifiInfo">Carregando...</span>
+                        </div>
+                        <div class="info-item">
+                            <label>IP Local:</label>
+                            <span id="localIP">Carregando...</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Última Inicialização:</label>
+                            <span id="lastBoot">Carregando...</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal de Restaurar Backup -->
+    <div id="restoreModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">📂 Restaurar Backup</h3>
+                <button class="modal-close" onclick="closeRestoreModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label" for="backupFile">Selecionar Arquivo de Backup</label>
+                    <input type="file" id="backupFile" class="form-input" accept=".json,.bak">
+                    <small class="form-help">Selecione um arquivo de backup válido (.json ou .bak)</small>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">
+                        <input type="checkbox" id="overwriteUsers"> Sobrescrever usuários existentes
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">
+                        <input type="checkbox" id="restoreSettings"> Restaurar configurações
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeRestoreModal()">Cancelar</button>
+                <button class="btn btn-warning" onclick="executeRestore()">Restaurar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmação -->
+    <div id="confirmModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="confirmTitle">Confirmar Ação</h3>
+                <button class="modal-close" onclick="closeConfirmModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="confirmMessage">Tem certeza que deseja executar esta ação?</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeConfirmModal()">Cancelar</button>
+                <button class="btn btn-danger" id="confirmBtn" onclick="executeConfirmedAction()">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <div class="loading-text">Processando...</div>
+    </div>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/admin.js"></script>
+    
+    <script>
+        // Variáveis globais
+        let currentSettings = {};
+        let pendingAction = null;
+
+        // Inicialização da página
+        document.addEventListener('DOMContentLoaded', function() {
+            initSettingsPage();
+        });
+
+        function initSettingsPage() {
+            checkAuth();
+            loadCurrentSettings();
+            setupEventListeners();
+            startStatusUpdate();
+        }
+
+        function setupEventListeners() {
+            // Formulário de autenticação
+            document.getElementById('authSettingsForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                saveAuthSettings();
+            });
+
+            // Formulário da cafeteira
+            document.getElementById('coffeeSettingsForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                saveCoffeeSettings();
+            });
+
+            // Formulário de usuários
+            document.getElementById('userSettingsForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                saveUserSettings();
+            });
+
+            // Slider de brilho
+            document.getElementById('ledBrightness').addEventListener('input', function(e) {
+                updateLEDBrightness(e.target.value);
+            });
+        }
+
+        async function loadCurrentSettings() {
+            try {
+                showLoading(true);
+                
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                
+                if (data) {
+                    currentSettings = data;
+                    updateSettingsForm(data);
+                    updateSystemInfo(data);
+                }
+            } catch (error) {
+                console.error('Erro ao carregar configurações:', error);
+                showAlert('Erro ao carregar configurações', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function updateSettingsForm(data) {
+            // Configurações da cafeteira
+            if (data.coffee) {
+                document.getElementById('currentCoffees').value = data.coffee.remaining || 0;
+                document.getElementById('maxCoffees').value = data.coffee.maxCapacity || 100;
+            }
+
+            // Outras configurações seriam carregadas aqui
+            // Por exemplo, via endpoint específico /api/settings
+        }
+
+        function updateSystemInfo(data) {
+            if (data.system) {
+                document.getElementById('systemUptime').textContent = formatUptime(data.system.uptime);
+                document.getElementById('freeMemory').textContent = formatMemory(data.system.freeHeap);
+                document.getElementById('wifiInfo').textContent = data.system.wifiConnected ? 'Conectado' : 'Desconectado';
+                document.getElementById('localIP').textContent = data.system.wifiIP || 'N/A';
+            }
+        }
+
+        async function saveAuthSettings() {
+            const username = document.getElementById('adminUsername').value.trim();
+            const password = document.getElementById('adminPassword').value;
+            const confirmPassword = document.getElementById('adminPasswordConfirm').value;
+
+            if (!username) {
+                showAlert('Nome de usuário é obrigatório', 'error');
+                return;
+            }
+
+            if (password && password !== confirmPassword) {
+                showAlert('As senhas não coincidem', 'error');
+                return;
+            }
+
+            if (password && password.length < 6) {
+                showAlert('A senha deve ter pelo menos 6 caracteres', 'error');
+                return;
+            }
+
+            try {
+                showLoading(true);
+
+                const requestBody = { username };
+                if (password) {
+                    requestBody.password = password;
+                }
+
+                const response = await fetch('/api/admin/credentials', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('Credenciais atualizadas com sucesso!', 'success');
+                    document.getElementById('adminPassword').value = '';
+                    document.getElementById('adminPasswordConfirm').value = '';
+                } else {
+                    showAlert(result.message || 'Erro ao atualizar credenciais', 'error');
+                }
+            } catch (error) {
+                console.error('Erro ao salvar credenciais:', error);
+                showAlert('Erro de conexão', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function saveCoffeeSettings() {
+            const maxCoffees = parseInt(document.getElementById('maxCoffees').value);
+            const currentCoffees = parseInt(document.getElementById('currentCoffees').value);
+            const serveTime = parseInt(document.getElementById('serveTime').value);
+            const cooldownTime = parseInt(document.getElementById('cooldownTime').value);
+
+            if (currentCoffees > maxCoffees) {
+                showAlert('Cafés atuais não podem ser maiores que a capacidade máxima', 'error');
+                return;
+            }
+
+            try {
+                showLoading(true);
+
+                const response = await fetch('/api/coffee/settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        maxCoffees,
+                        currentCoffees,
+                        serveTime: serveTime * 1000, // Converter para ms
+                        cooldownTime: cooldownTime * 1000 // Converter para ms
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('Configurações da cafeteira atualizadas!', 'success');
+                } else {
+                    showAlert(result.message || 'Erro ao atualizar configurações', 'error');
+                }
+            } catch (error) {
+                console.error('Erro ao salvar configurações:', error);
+                showAlert('Erro de conexão', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function saveUserSettings() {
+            const initialCredits = parseInt(document.getElementById('initialCredits').value);
+            const maxUsers = parseInt(document.getElementById('maxUsers').value);
+            const weeklyReset = document.getElementById('weeklyReset').checked;
+            const resetDay = parseInt(document.getElementById('resetDay').value);
+
+            try {
+                showLoading(true);
+
+                const response = await fetch('/api/users/settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        initialCredits,
+                        maxUsers,
+                        weeklyReset,
+                        resetDay
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('Configurações de usuários atualizadas!', 'success');
+                } else {
+                    showAlert(result.message || 'Erro ao atualizar configurações', 'error');
+                }
+            } catch (error) {
+                console.error('Erro ao salvar configurações:', error);
+                showAlert('Erro de conexão', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function saveSystemSettings() {
+            const ledBrightness = parseInt(document.getElementById('ledBrightness').value);
+            const audioEnabled = document.getElementById('audioEnabled').checked;
+            const logLevel = parseInt(document.getElementById('logLevel').value);
+            const timezone = parseInt(document.getElementById('timezone').value);
+
+            try {
+                showLoading(true);
+
+                const response = await fetch('/api/system/settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        ledBrightness,
+                        audioEnabled,
+                        logLevel,
+                        timezone
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('Configurações do sistema atualizadas!', 'success');
+                } else {
+                    showAlert(result.message || 'Erro ao atualizar configurações', 'error');
+                }
+            } catch (error) {
+                console.error('Erro ao salvar configurações:', error);
+                showAlert('Erro de conexão', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function resetCoffeeSettings() {
+            document.getElementById('maxCoffees').value = '100';
+            document.getElementById('currentCoffees').value = '100';
+            document.getElementById('serveTime').value = '8';
+            document.getElementById('cooldownTime').value = '3';
+            showAlert('Configurações restauradas para o padrão', 'info');
+        }
+
+        function updateLEDBrightness(value) {
+            document.getElementById('brightnessValue').textContent = value + '%';
+            
+            // Enviar comando para ESP32 atualizar brilho em tempo real
+            fetch('/api/led/brightness', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ brightness: parseInt(value) })
+            }).catch(e => console.error('Erro ao atualizar brilho:', e));
+        }
+
+        async function testCoffeeSystem() {
+            showConfirmDialog(
+                'Testar Sistema',
+                'Isso irá servir um café para teste. Confirmar?',
+                async () => {
+                    try {
+                        showLoading(true);
+                        const response = await fetch('/api/serve-coffee', { method: 'POST' });
+                        const result = await response.json();
+                        
+                        if (result.success) {
+                            showAlert('Sistema testado com sucesso!', 'success');
+                        } else {
+                            showAlert(result.message || 'Erro no teste', 'error');
+                        }
+                    } catch (error) {
+                        showAlert('Erro de conexão no teste', 'error');
+                    } finally {
+                        showLoading(false);
+                    }
+                }
+            );
+        }
+
+        function restartSystem() {
+            showConfirmDialog(
+                'Reiniciar Sistema',
+                'O sistema será reiniciado. Esta ação pode levar alguns minutos. Confirmar?',
+                async () => {
+                    try {
+                        showLoading(true);
+                        await fetch('/api/system-reset', { method: 'POST' });
+                        showAlert('Sistema reiniciando... Aguarde alguns instantes.', 'info');
+                        
+                        setTimeout(() => {
+                            location.reload();
+                        }, 10000);
+                    } catch (error) {
+                        showAlert('Erro ao reiniciar sistema', 'error');
+                        showLoading(false);
+                    }
+                }
+            );
+        }
+
+        async function backupData() {
+            try {
+                showLoading(true);
+                const response = await fetch('/api/backup');
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `cafeteira_backup_${new Date().toISOString().split('T')[0]}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    
+                    showAlert('Backup criado e baixado com sucesso!', 'success');
+                } else {
+                    showAlert('Erro ao criar backup', 'error');
+                }
+            } catch (error) {
+                console.error('Erro no backup:', error);
+                showAlert('Erro de conexão no backup', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function showRestoreDialog() {
+            document.getElementById('restoreModal').classList.add('show');
+        }
+
+        function closeRestoreModal() {
+            document.getElementById('restoreModal').classList.remove('show');
+            document.getElementById('backupFile').value = '';
+        }
+
+        async function executeRestore() {
+            const fileInput = document.getElementById('backupFile');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showAlert('Selecione um arquivo de backup', 'error');
+                return;
+            }
+
+            const overwriteUsers = document.getElementById('overwriteUsers').checked;
+            const restoreSettings = document.getElementById('restoreSettings').checked;
+
+            try {
+                showLoading(true);
+                
+                const formData = new FormData();
+                formData.append('backup', file);
+                formData.append('overwriteUsers', overwriteUsers);
+                formData.append('restoreSettings', restoreSettings);
+
+                const response = await fetch('/api/restore', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('Backup restaurado com sucesso!', 'success');
+                    closeRestoreModal();
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    showAlert(result.message || 'Erro ao restaurar backup', 'error');
+                }
+            } catch (error) {
+                console.error('Erro na restauração:', error);
+                showAlert('Erro de conexão na restauração', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function factoryReset() {
+            showConfirmDialog(
+                'Reset de Fábrica',
+                'ATENÇÃO: Esta ação irá apagar TODOS os dados (usuários, configurações, logs). Esta ação é IRREVERSÍVEL. Tem certeza?',
+                () => {
+                    showConfirmDialog(
+                        'Confirmar Reset de Fábrica',
+                        'Digite "CONFIRMAR" para prosseguir com o reset de fábrica:',
+                        async () => {
+                            const confirmation = prompt('Digite "CONFIRMAR" para prosseguir:');
+                            if (confirmation === 'CONFIRMAR') {
+                                try {
+                                    showLoading(true);
+                                    await fetch('/api/factory-reset', { method: 'POST' });
+                                    showAlert('Reset de fábrica executado. Sistema reiniciando...', 'info');
+                                    
+                                    setTimeout(() => {
+                                        location.href = '/login';
+                                    }, 5000);
+                                } catch (error) {
+                                    showAlert('Erro no reset de fábrica', 'error');
+                                    showLoading(false);
+                                }
+                            } else {
+                                showAlert('Reset cancelado', 'info');
+                            }
+                        }
+                    );
+                }
+            );
+        }
+
+        function startStatusUpdate() {
+            setInterval(() => {
+                if (!document.hidden) {
+                    loadCurrentSettings();
+                }
+            }, 30000

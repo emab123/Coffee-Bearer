@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciar Usuários - Cafeteira RFID</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="app-title">
+                <div class="coffee-icon">☕</div>
+                <div>
+                    <h1>Cafeteira RFID - Admin</h1>
+                    <p class="version">Gerenciamento de Usuários v4.0</p>
+                </div>
+            </div>
+            <div class="user-info">
+                <div class="user-avatar">A</div>
+                <div>
+                    <div class="user-name">Administrador</div>
+                    <div class="user-role">Admin</div>
+                </div>
+                <button class="logout-btn" onclick="logout()">Sair</button>
+            </div>
+        </header>
+
+        <nav class="app-nav">
+            <ul class="nav-tabs">
+                <li class="nav-tab"><a href="/admin/dashboard">Dashboard</a></li>
+                <li class="nav-tab active"><a href="/admin/users">Usuários</a></li>
+                <li class="nav-tab"><a href="/admin/settings">Configurações</a></li>
+                <li class="nav-tab"><a href="/admin/logs">Logs</a></li>
+                <li class="nav-tab"><a href="/admin/stats">Estatísticas</a></li>
+            </ul>
+        </nav>
+
+        <main class="app-main">
+            <!-- Sistema de Alertas -->
+            <div id="alertContainer"></div>
+
+            <!-- Estatísticas dos Usuários -->
+            <section class="stats-section">
+                <h2 class="section-title">Resumo dos Usuários</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-number" id="totalUsersCount">0</span>
+                        <span class="stat-label">Total de Usuários</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" id="activeUsersCount">0</span>
+                        <span class="stat-label">Usuários Ativos</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" id="totalCreditsCount">0</span>
+                        <span class="stat-label">Total de Créditos</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" id="activeTodayCount">0</span>
+                        <span class="stat-label">Ativos Hoje</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Controles de Usuários -->
+            <section class="user-controls">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Adicionar Novo Usuário</h3>
+                    </div>
+                    <form id="addUserForm" class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label" for="userUID">UID do Cartão RFID *</label>
+                            <input type="text" id="userUID" class="form-input" placeholder="XX XX XX XX" required>
+                            <small class="form-help">Aproxime o cartão RFID do leitor para capturar automaticamente</small>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="userName">Nome do Usuário *</label>
+                            <input type="text" id="userName" class="form-input" placeholder="Digite o nome" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="initialCredits">Créditos Iniciais</label>
+                            <input type="number" id="initialCredits" class="form-input" value="10" min="0" max="100">
+                        </div>
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-success">
+                                <span>➕ Adicionar Usuário</span>
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="clearForm()">
+                                <span>🧹 Limpar</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Lista de Usuários -->
+            <section class="users-list">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Usuários Cadastrados</h3>
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-outline" onclick="refreshUsers()">
+                                🔄 Atualizar
+                            </button>
+                            <button class="btn btn-sm btn-outline" onclick="exportUsers()">
+                                💾 Exportar
+                            </button>
+                            <button class="btn btn-sm btn-warning" onclick="resetAllCredits()">
+                                🔄 Reset Créditos
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Filtros -->
+                    <div class="filters">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <input type="text" id="searchFilter" class="form-input" 
+                                       placeholder="Buscar por nome ou UID..." onkeyup="filterUsers()">
+                            </div>
+                            <div class="form-group">
+                                <select id="statusFilter" class="form-select" onchange="filterUsers()">
+                                    <option value="">Todos os usuários</option>
+                                    <option value="active">Apenas ativos</option>
+                                    <option value="inactive">Apenas inativos</option>
+                                    <option value="no-credits">Sem créditos</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tabela de Usuários -->
+                    <div class="table-container">
+                        <table class="table" id="usersTable">
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>UID</th>
+                                    <th>Créditos</th>
+                                    <th>Status</th>
+                                    <th>Último Uso</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTableBody">
+                                <tr>
+                                    <td colspan="6" class="text-center">Carregando usuários...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal de Edição de Usuário -->
+    <div id="editUserModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Editar Usuário</h3>
+                <button class="modal-close" onclick="closeEditModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="editUserForm">
+                    <input type="hidden" id="editUserUID">
+                    <div class="form-group">
+                        <label class="form-label" for="editUserName">Nome do Usuário</label>
+                        <input type="text" id="editUserName" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="editUserCredits">Créditos</label>
+                        <input type="number" id="editUserCredits" class="form-input" min="0" max="100">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">
+                            <input type="checkbox" id="editUserActive"> Usuário ativo
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeEditModal()">Cancelar</button>
+                <button class="btn btn-primary" onclick="saveUserEdit()">Salvar Alterações</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmação -->
+    <div id="confirmModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="confirmTitle">Confirmar Ação</h3>
+                <button class="modal-close" onclick="closeConfirmModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="confirmMessage">Tem certeza que deseja executar esta ação?</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeConfirmModal()">Cancelar</button>
+                <button class="btn btn-danger" id="confirmBtn" onclick="executeConfirmedAction()">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <div class="loading-text">Processando...</div>
+    </div>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/admin.js"></script>
+    
+    <script>
+        // Variáveis globais
+        let users = [];
+        let filteredUsers = [];
+        let pendingAction = null;
+        let editingUser = null;
+
+        // Inicialização da página
+        document.addEventListener('DOMContentLoaded', function() {
+            initUsersPage();
+        });
+
+        function initUsersPage() {
+            checkAuth();
+            loadUsers();
+            setupEventListeners();
+            startAutoRefresh();
+        }
+
+        function setupEventListeners() {
+            // Formulário de adicionar usuário
+            document.getElementById('addUserForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                addUser();
+            });
+
+            // Formulário de editar usuário
+            document.getElementById('editUserForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                saveUserEdit();
+            });
+
+            // Fechar modais com ESC
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    closeEditModal();
+                    closeConfirmModal();
+                }
+            });
+        }
+
+        async function loadUsers() {
+            try {
+                showLoading(true);
+                
+                const response = await fetch('/api/users');
+                const data = await response.json();
+                
+                if (data.users) {
+                    users = data.users;
+                    filteredUsers = [...users];
+                    updateUsersTable();
+                    updateUserStats();
+                } else {
+                    showAlert('Erro ao carregar usuários', 'error');
+                }
+            } catch (error) {
+                console.error('Erro ao carregar usuários:', error);
+                showAlert('Erro de conexão ao carregar usuários', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function updateUsersTable() {
+            const tbody = document.getElementById('usersTableBody');
+            
+            if (filteredUsers.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum usuário encontrado</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = filteredUsers.map(user => `
+                <tr>
+                    <td><strong>${escapeHtml(user.name)}</strong></td>
+                    <td><code>${escapeHtml(user.uid)}</code></td>
+                    <td>
+                        <span class="badge ${user.credits > 0 ? 'badge-success' : 'badge-error'}">
+                            ${user.credits}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="status-badge ${user.isActive ? 'active' : 'inactive'}">
+                            ${user.isActive ? 'Ativo' : 'Inativo'}
+                        </span>
+                    </td>
+                    <td>${formatLastUsed(user.lastUsed)}</td>
+                    <td>
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-outline" onclick="editUser('${user.uid}')" title="Editar">
+                                ✏️
+                            </button>
+                            <button class="btn btn-sm btn-outline" onclick="addCredits('${user.uid}')" title="Adicionar Créditos">
+                                💳
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="removeUser('${user.uid}')" title="Remover">
+                                🗑️
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function updateUserStats() {
+            const totalUsers = users.length;
+            const activeUsers = users.filter(u => u.isActive && u.credits > 0).length;
+            const totalCredits = users.reduce((sum, u) => sum + u.credits, 0);
+            const activeToday = users.filter(u => isActiveToday(u.lastUsed)).length;
+
+            document.getElementById('totalUsersCount').textContent = totalUsers;
+            document.getElementById('activeUsersCount').textContent = activeUsers;
+            document.getElementById('totalCreditsCount').textContent = totalCredits;
+            document.getElementById('activeTodayCount').textContent = activeToday;
+        }
+
+        function filterUsers() {
+            const searchTerm = document.getElementById('searchFilter').value.toLowerCase();
+            const statusFilter = document.getElementById('statusFilter').value;
+
+            filteredUsers = users.filter(user => {
+                // Filtro de busca
+                const matchesSearch = !searchTerm || 
+                    user.name.toLowerCase().includes(searchTerm) ||
+                    user.uid.toLowerCase().includes(searchTerm);
+
+                // Filtro de status
+                const matchesStatus = !statusFilter ||
+                    (statusFilter === 'active' && user.isActive && user.credits > 0) ||
+                    (statusFilter === 'inactive' && (!user.isActive || user.credits === 0)) ||
+                    (statusFilter === 'no-credits' && user.credits === 0);
+
+                return matchesSearch && matchesStatus;
+            });
+
+            updateUsersTable();
+        }
+
+        async function addUser() {
+            const uid = document.getElementById('userUID').value.trim().toUpperCase();
+            const name = document.getElementById('userName').value.trim();
+            const credits = parseInt(document.getElementById('initialCredits').value) || 10;
+
+            if (!uid || !name) {
+                showAlert('UID e nome são obrigatórios', 'error');
+                return;
+            }
+
+            try {
+                showLoading(true);
+
+                const response = await fetch('/api/users', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        uid: uid,
+                        name: name,
+                        credits: credits
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('Usuário adicionado com sucesso!', 'success');
+                    clearForm();
+                    await loadUsers(); // Recarregar lista
+                } else {
+                    showAlert(result.message || 'Erro ao adicionar usuário', 'error');
+                }
+            } catch (error) {
+                console.error('Erro ao adicionar usuário:', error);
+                showAlert('Erro de conexão', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function editUser(uid) {
+            const user = users.find(u => u.uid === uid);
+            if (!user) return;
+
+            editingUser = user;
+            
+            document.getElementById('editUserUID').value = user.uid;
+            document.getElementById('editUserName').value = user.name;
+            document.getElementById('editUserCredits').value = user.credits;
+            document.getElementById('editUserActive').checked = user.isActive;
+
+            document.getElementById('editUserModal').classList.add('show');
+        }
+
+        async function saveUserEdit() {
+            if (!editingUser) return;
+
+            const name = document.getElementById('editUserName').value.trim();
+            const credits = parseInt(document.getElementById('editUserCredits').value);
+            const isActive = document.getElementById('editUserActive').checked;
+
+            if (!name) {
+                showAlert('Nome é obrigatório', 'error');
+                return;
+            }
+
+            try {
+                showLoading(true);
+
+                const response = await fetch('/api/users', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        uid: editingUser.uid,
+                        name: name,
+                        credits: credits,
+                        isActive: isActive
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('Usuário atualizado com sucesso!', 'success');
+                    closeEditModal();
+                    await loadUsers();
+                } else {
+                    showAlert(result.message || 'Erro ao atualizar usuário', 'error');
+                }
+            } catch (error) {
+                console.error('Erro ao atualizar usuário:', error);
+                showAlert('Erro de conexão', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function removeUser(uid) {
+            const user = users.find(u => u.uid === uid);
+            if (!user) return;
+
+            showConfirmDialog(
+                'Remover Usuário',
+                `Tem certeza que deseja remover o usuário "${user.name}"? Esta ação não pode ser desfeita.`,
+                () => executeRemoveUser(uid)
+            );
+        }
+
+        async function executeRemoveUser(uid) {
+            try {
+                showLoading(true);
+
+                const response = await fetch('/api/users', {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ uid: uid })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('Usuário removido com sucesso!', 'success');
+                    await loadUsers();
+                } else {
+                    showAlert(result.message || 'Erro ao remover usuário', 'error');
+                }
+            } catch (error) {
+                console.error('Erro ao remover usuário:', error);
+                showAlert('Erro de conexão', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function addCredits(uid) {
+            const credits = prompt('Quantos créditos adicionar?', '5');
+            if (credits === null || isNaN(credits) || credits <= 0) return;
+
+            // Esta funcionalidade seria implementada através da API
+            showAlert('Funcionalidade em desenvolvimento', 'info');
+        }
+
+        function resetAllCredits() {
+            showConfirmDialog(
+                'Reset de Créditos',
+                'Tem certeza que deseja resetar os créditos de todos os usuários para 10?',
+                async () => {
+                    // Esta funcionalidade seria implementada através da API
+                    showAlert('Funcionalidade em desenvolvimento', 'info');
+                }
+            );
+        }
+
+        function clearForm() {
+            document.getElementById('addUserForm').reset();
+            document.getElementById('initialCredits').value = '10';
+        }
+
+        function refreshUsers() {
+            loadUsers();
+        }
+
+        function exportUsers() {
+            const csvContent = 'data:text/csv;charset=utf-8,Nome,UID,Créditos,Status,Último Uso\n' +
+                users.map(user => 
+                    `"${user.name}","${user.uid}",${user.credits},"${user.isActive ? 'Ativo' : 'Inativo'}","${new Date(user.lastUsed).toLocaleString()}"`
+                ).join('\n');
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement('a');
+            link.setAttribute('href', encodedUri);
+            link.setAttribute('download', `usuarios_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            showAlert('Dados exportados com sucesso!', 'success');
+        }
+
+        function closeEditModal() {
+            document.getElementById('editUserModal').classList.remove('show');
+            editingUser = null;
+        }
+
+        // Utilitários
+        function formatLastUsed(timestamp) {
+            if (!timestamp || timestamp === 0) return 'Nunca';
+            
+            const now = Date.now();
+            const diff = now - timestamp;
+            
+            if (diff < 60000) return 'Agora mesmo';
+            if (diff < 3600000) return Math.floor(diff / 60000) + ' min atrás';
+            if (diff < 86400000) return Math.floor(diff / 3600000) + ' h atrás';
+            return Math.floor(diff / 86400000) + ' dias atrás';
+        }
+
+        function isActiveToday(timestamp) {
+            if (!timestamp) return false;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            return timestamp >= today.getTime();
+        }
+
+        function startAutoRefresh() {
+            setInterval(() => {
+                if (!document.hidden) {
+                    loadUsers();
+                }
+            }, 30000); // Atualizar a cada 30 segundos
+        }
+    </script>
+</body>
+</html>

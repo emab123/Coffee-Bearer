@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logs do Sistema - Cafeteira RFID</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="app-title">
+                <div class="coffee-icon">☕</div>
+                <div>
+                    <h1>Cafeteira RFID - Admin</h1>
+                    <p class="version">Logs do Sistema v4.0</p>
+                </div>
+            </div>
+            <div class="user-info">
+                <div class="user-avatar">A</div>
+                <div>
+                    <div class="user-name">Administrador</div>
+                    <div class="user-role">Admin</div>
+                </div>
+                <button class="logout-btn" onclick="logout()">Sair</button>
+            </div>
+        </header>
+
+        <nav class="app-nav">
+            <ul class="nav-tabs">
+                <li class="nav-tab"><a href="/admin/dashboard">Dashboard</a></li>
+                <li class="nav-tab"><a href="/admin/users">Usuários</a></li>
+                <li class="nav-tab"><a href="/admin/settings">Configurações</a></li>
+                <li class="nav-tab active"><a href="/admin/logs">Logs</a></li>
+                <li class="nav-tab"><a href="/admin/stats">Estatísticas</a></li>
+            </ul>
+        </nav>
+
+        <main class="app-main">
+            <!-- Sistema de Alertas -->
+            <div id="alertContainer"></div>
+
+            <!-- Controles de Logs -->
+            <section class="logs-controls">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">📋 Controles de Logs</h3>
+                    </div>
+                    <div class="controls-grid">
+                        <div class="control-group">
+                            <label class="form-label" for="logLevel">Filtrar por Nível</label>
+                            <select id="logLevel" class="form-select" onchange="filterLogs()">
+                                <option value="">Todos os níveis</option>
+                                <option value="debug">Debug</option>
+                                <option value="info">Info</option>
+                                <option value="warning">Warning</option>
+                                <option value="error">Error</option>
+                                <option value="critical">Critical</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label class="form-label" for="logCategory">Filtrar por Categoria</label>
+                            <select id="logCategory" class="form-select" onchange="filterLogs()">
+                                <option value="">Todas as categorias</option>
+                                <option value="system">Sistema</option>
+                                <option value="rfid">RFID</option>
+                                <option value="coffee">Café</option>
+                                <option value="user">Usuário</option>
+                                <option value="auth">Autenticação</option>
+                                <option value="web">Web</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label class="form-label" for="logSearch">Buscar</label>
+                            <input type="text" id="logSearch" class="form-input" 
+                                   placeholder="Buscar nos logs..." onkeyup="filterLogs()">
+                        </div>
+                        <div class="control-group">
+                            <label class="form-label" for="logLimit">Quantidade</label>
+                            <select id="logLimit" class="form-select" onchange="loadLogs()">
+                                <option value="50">50 logs</option>
+                                <option value="100" selected>100 logs</option>
+                                <option value="200">200 logs</option>
+                                <option value="500">500 logs</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="btn-group mt-md">
+                        <button class="btn btn-primary" onclick="loadLogs()">
+                            🔄 Atualizar
+                        </button>
+                        <button class="btn btn-secondary" onclick="exportLogs()">
+                            💾 Exportar
+                        </button>
+                        <button class="btn btn-warning" onclick="clearLogs()">
+                            🗑️ Limpar Logs
+                        </button>
+                        <button class="btn btn-outline" onclick="toggleAutoRefresh()">
+                            <span id="autoRefreshText">⏸️ Pausar</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Estatísticas dos Logs -->
+            <section class="logs-stats">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">📊 Estatísticas dos Logs</h3>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <span class="stat-number" id="totalLogsCount">0</span>
+                            <span class="stat-label">Total de Logs</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-number" id="errorLogsCount">0</span>
+                            <span class="stat-label">Erros</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-number" id="warningLogsCount">0</span>
+                            <span class="stat-label">Avisos</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-number" id="todayLogsCount">0</span>
+                            <span class="stat-label">Hoje</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Lista de Logs -->
+            <section class="logs-list">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">📝 Logs do Sistema</h3>
+                        <div class="logs-info">
+                            <span id="logsCount">0</span> logs exibidos
+                            <span class="logs-status" id="logsStatus">●</span>
+                        </div>
+                    </div>
+                    
+                    <div class="logs-container" id="logsContainer">
+                        <div class="logs-loading">
+                            <div class="spinner"></div>
+                            <p>Carregando logs...</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Paginação -->
+                    <div class="logs-pagination" id="logsPagination" style="display: none;">
+                        <button class="btn btn-sm btn-outline" onclick="loadPreviousLogs()">
+                            ← Anteriores
+                        </button>
+                        <span id="paginationInfo">Página 1</span>
+                        <button class="btn btn-sm btn-outline" onclick="loadNextLogs()">
+                            Próximos →
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal de Detalhes do Log -->
+    <div id="logDetailsModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">📄 Detalhes do Log</h3>
+                <button class="modal-close" onclick="closeLogDetailsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="log-detail">
+                    <label>Timestamp:</label>
+                    <span id="detailTimestamp"></span>
+                </div>
+                <div class="log-detail">
+                    <label>Nível:</label>
+                    <span id="detailLevel"></span>
+                </div>
+                <div class="log-detail">
+                    <label>Categoria:</label>
+                    <span id="detailCategory"></span>
+                </div>
+                <div class="log-detail">
+                    <label>Mensagem:</label>
+                    <span id="detailMessage"></span>
+                </div>
+                <div class="log-detail" id="detailDetailsContainer" style="display: none;">
+                    <label>Detalhes:</label>
+                    <span id="detailDetails"></span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeLogDetailsModal()">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <div class="loading-text">Carregando logs...</div>
+    </div>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/admin.js"></script>
+    
+    <style>
+        .logs-container {
+            max-height: 600px;
+            overflow-y: auto;
+            border: 1px solid #e1e5e9;
+            border-radius: var(--border-radius-md);
+        }
+
+        .log-entry {
+            display: flex;
+            align-items: flex-start;
+            gap: var(--spacing-md);
+            padding: var(--spacing-md);
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .log-entry:hover {
+            background-color: #f8f9fa;
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-time {
+            min-width: 80px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .log-level {
+            min-width: 80px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            padding: 2px 8px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .log-level.debug { background: #e3f2fd; color: #1976d2; }
+        .log-level.info { background: #e8f5e8; color: #2e7d32; }
+        .log-level.warning { background: #fff3e0; color: #f57c00; }
+        .log-level.error { background: #ffebee; color: #d32f2f; }
+        .log-level.critical { background: #fce4ec; color: #c2185b; }
+
+        .log-message {
+            flex: 1;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        .log-details {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            font-style: italic;
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: var(--spacing-md);
+            margin-bottom: var(--spacing-md);
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logs-info {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .logs-status {
+            font-size: 1.2rem;
+            animation: pulse 2s infinite;
+        }
+
+        .logs-status.active { color: #4caf50; }
+        .logs-status.inactive { color: #9e9e9e; }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .logs-loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: var(--spacing-xl);
+            color: var(--text-secondary);
+        }
+
+        .logs-pagination {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--spacing-md);
+            border-top: 1px solid #e1e5e9;
+        }
+
+        .log-detail {
+            display: grid;
+            grid-template-columns: 120px 1fr;
+            gap: var(--spacing-md);
+            margin-bottom: var(--spacing-md);
+            align-items: start;
+        }
+
+        .log-detail label {
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .log-detail span {
+            word-break: break-word;
+        }
+    </style>
+    
+    <script>
+        // Variáveis específicas da página de logs
+        let allLogs = [];
+        let filteredLogs = [];
+        let currentPage = 1;
+        let logsPerPage = 100;
+
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function() {
+            initLogsPage();
+        });
+
+        function initLogsPage() {
+            checkAuth();
+            loadLogs();
+            setupLogsAutoRefresh();
+        }
+
+        async function loadLogs() {
+            try {
+                showLoading(true);
+                updateLogsStatus('inactive');
+                
+                const limit = document.getElementById('logLimit').value;
+                const response = await apiRequest(`/api/logs?limit=${limit}`);
+                
+                if (response && response.logs) {
+                    allLogs = response.logs;
+                    filteredLogs = [...allLogs];
+                    updateLogsDisplay();
+                    updateLogsStats();
+                    updateLogsStatus('active');
+                } else {
+                    showAlert('Erro ao carregar logs', 'error');
+                }
+                
+            } catch (error) {
+                console.error('Erro ao carregar logs:', error);
+                showAlert('Erro de conexão ao carregar logs', 'error');
+                updateLogsStatus('inactive');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function updateLogsDisplay() {
+            const container = document.getElementById('logsContainer');
+            const countElement = document.getElementById('logsCount');
+            
+            if (!container) return;
+            
+            // Atualizar contador
+            if (countElement) {
+                countElement.textContent = filteredLogs.length;
+            }
+            
+            if (filteredLogs.length === 0) {
+                container.innerHTML = `
+                    <div class="logs-loading">
+                        <p>Nenhum log encontrado com os filtros atuais</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Renderizar logs
+            container.innerHTML = filteredLogs.map((log, index) => `
+                <div class="log-entry" onclick="showLogDetails(${index})">
+                    <div class="log-time">${formatLogTime(log)}</div>
+                    <div class="log-level log-level-${getLogLevel(log)}">${getLogLevel(log)}</div>
+                    <div class="log-content">
+                        <div class="log-message">${escapeHtml(getLogMessage(log))}</div>
+                        ${getLogDetails(log) ? `<div class="log-details">${escapeHtml(getLogDetails(log))}</div>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateLogsStats() {
+            const totalCount = allLogs.length;
+            const errorCount = allLogs.filter(log => getLogLevel(log) === 'error').length;
+            const warningCount = allLogs.filter(log => getLogLevel(log) === 'warning').length;
+            const todayCount = allLogs.filter(log => isLogFromToday(log)).length;
+
+            document.getElementById('totalLogsCount').textContent = totalCount;
+            document.getElementById('errorLogsCount').textContent = errorCount;
+            document.getElementById('warningLogsCount').textContent = warningCount;
+            document.getElementById('todayLogsCount').textContent = todayCount;
+        }
+
+        function filterLogs() {
+            const levelFilter = document.getElementById('logLevel').value.toLowerCase();
+            const categoryFilter = document.getElementById('logCategory').value.toLowerCase();
+            const searchFilter = document.getElementById('logSearch').value.toLowerCase();
+
+            filteredLogs = allLogs.filter(log => {
+                // Filtro por nível
+                if (levelFilter && getLogLevel(log) !== levelFilter) {
+                    return false;
+                }
+
+                // Filtro por categoria
+                if (categoryFilter && getLogCategory(log).toLowerCase() !== categoryFilter) {
+                    return false;
+                }
+
+                // Filtro por busca
+                if (searchFilter) {
+                    const message = getLogMessage(log).toLowerCase();
+                    const details = getLogDetails(log).toLowerCase();
+                    if (!message.includes(searchFilter) && !details.includes(searchFilter)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            });
+
+            updateLogsDisplay();
+        }
+
+        function updateLogsStatus(status) {
+            const statusElement = document.getElementById('logsStatus');
+            if (statusElement) {
+                statusElement.className = `logs-status ${status}`;
+            }
+        }
+
+        function setupLogsAutoRefresh() {
+            setInterval(() => {
+                if (!document.hidden && autoRefreshEnabled) {
+                    loadLogs();
+                }
+            }, 10000); // Atualizar a cada 10 segundos
+        }
+
+        function showLogDetails(index) {
+            const log = filteredLogs[index];
+            if (!log) return;
+
+            // Preencher modal com detalhes
+            document.getElementById('detailTimestamp').textContent = formatFullLogTime(log);
+            document.getElementById('detailLevel').textContent = getLogLevel(log).toUpperCase();
+            document.getElementById('detailCategory').textContent = getLogCategory(log);
+            document.getElementById('detailMessage').textContent = getLogMessage(log);
+
+            const details = getLogDetails(log);
+            const detailsContainer = document.getElementById('detailDetailsContainer');
+            if (details) {
+                document.getElementById('detailDetails').textContent = details;
+                detailsContainer.style.display = 'block';
+            } else {
+                detailsContainer.style.display = 'none';
+            }
+
+            // Mostrar modal
+            document.getElementById('logDetailsModal').classList.add('show');
+        }
+
+        function closeLogDetailsModal() {
+            document.getElementById('logDetailsModal').classList.remove('show');
+        }
+
+        function exportLogs() {
+            try {
+                // Criar conteúdo CSV
+                const csvContent = [
+                    'Timestamp,Nível,Categoria,Mensagem,Detalhes',
+                    ...filteredLogs.map(log => {
+                        const timestamp = formatFullLogTime(log);
+                        const level = getLogLevel(log);
+                        const category = getLogCategory(log);
+                        const message = getLogMessage(log).replace(/"/g, '""');
+                        const details = getLogDetails(log).replace(/"/g, '""');
+                        return `"${timestamp}","${level}","${category}","${message}","${details}"`;
+                    })
+                ].join('\n');
+
+                // Download do arquivo
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                
+                link.setAttribute('href', url);
+                link.setAttribute('download', `logs_${new Date().toISOString().split('T')[0]}.csv`);
+                link.style.visibility = 'hidden';
+                
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                showAlert('Logs exportados com sucesso!', 'success');
+            } catch (error) {
+                console.error('Erro ao exportar logs:', error);
+                showAlert('Erro ao exportar logs', 'error');
+            }
+        }
+
+        // Funções utilitárias para logs
+        function getLogMessage(log) {
+            if (typeof log === 'string') return log;
+            return log.message || log.text || 'Mensagem não disponível';
+        }
+
+        function getLogDetails(log) {
+            if (typeof log === 'string') return '';
+            return log.details || log.extra || '';
+        }
+
+        function getLogCategory(log) {
+            if (typeof log === 'string') {
+                if (log.includes('RFID')) return 'rfid';
+                if (log.includes('CAFÉ') || log.includes('COFFEE')) return 'coffee';
+                if (log.includes('USER') || log.includes('USUÁRIO')) return 'user';
+                if (log.includes('LOGIN') || log.includes('AUTH')) return 'auth';
+                if (log.includes('WEB') || log.includes('HTTP')) return 'web';
+                return 'system';
+            }
+            return log.category || 'system';
+        }
+
+        function getLogLevel(log) {
+            if (typeof log === 'string') {
+                if (log.includes('ERROR') || log.includes('ERRO')) return 'error';
+                if (log.includes('WARN') || log.includes('AVISO')) return 'warning';
+                if (log.includes('DEBUG')) return 'debug';
+                if (log.includes('CRITICAL') || log.includes('CRÍTICO')) return 'critical';
+                return 'info';
+            }
+            return (log.level || 'info').toLowerCase();
+        }
+
+        function formatLogTime(log) {
+            let timestamp;
+            
+            if (typeof log === 'string') {
+                timestamp = Date.now(); // Usar timestamp atual para strings simples
+            } else {
+                timestamp = log.timestamp || Date.now();
+            }
+            
+            return new Date(timestamp).toLocaleTimeString('pt-BR', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
+        function formatFullLogTime(log) {
+            let timestamp;
+            
+            if (typeof log === 'string') {
+                timestamp = Date.now();
+            } else {
+                timestamp = log.timestamp || Date.now();
+            }
+            
+            return new Date(timestamp).toLocaleString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
+        function isLogFromToday(log) {
+            let timestamp;
+            
+            if (typeof log === 'string') {
+                timestamp = Date.now();
+            } else {
+                timestamp = log.timestamp || Date.now();
+            }
+            
+            const logDate = new Date(timestamp);
+            const today = new Date();
+            
+            return logDate.toDateString() === today.toDateString();
+        }
+
+        // Paginação (para implementação futura)
+        function loadPreviousLogs() {
+            // Implementar carregamento de logs anteriores
+            showAlert('Funcionalidade em desenvolvimento', 'info');
+        }
+
+        function loadNextLogs() {
+            // Implementar carregamento de logs seguintes
+            showAlert('Funcionalidade em desenvolvimento', 'info');
+        }
+
+        // Sobrescrever função global para esta página
+        window.handleLogEntryUpdate = function(data) {
+            // Adicionar novo log no início
+            allLogs.unshift(data);
+            
+            // Limitar a 500 logs na memória
+            if (allLogs.length > 500) {
+                allLogs = allLogs.slice(0, 500);
+            }
+            
+            // Aplicar filtros e atualizar display
+            filterLogs();
+            updateLogsStats();
+            
+            // Mostrar indicador visual de novo log
+            updateLogsStatus('active');
+        };
+    </script>
+</body>
+</html>
