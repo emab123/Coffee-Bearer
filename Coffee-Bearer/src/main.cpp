@@ -15,7 +15,7 @@ Admin/Usuário, Autenticação e LED Neopixel
 
 // Inclusão dos módulos customizados
 #include "config.h"
-#include "rfid_manager.h"
+#include "RFID_manager.h"
 #include "user_manager.h"
 #include "coffee_controller.h"
 #include "web_server.h"
