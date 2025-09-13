@@ -218,7 +218,7 @@ void RFIDManager::printRFIDInfo() {
     DEBUG_PRINTF("Pino SS: %d\n", RFID_SS_PIN);
     DEBUG_PRINTF("Pino RST: %d\n", RFID_RST_PIN);
     DEBUG_PRINTF("Cooldown: %lu ms\n", COOLDOWN_TIME_MS);
-    DEBUG_PRINTF("Master UID: %s\n", UID_MESTRE);
+    DEBUG_PRINTF("Master UID: %s\n", MASTER_UID);
     DEBUG_PRINTF("Status: %s\n", isReady() ? "Pronto" : "Não Pronto");
     
     DEBUG_PRINTLN("=================================\n");
