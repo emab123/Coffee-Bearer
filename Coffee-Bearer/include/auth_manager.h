@@ -8,7 +8,7 @@ Sistema de login para Admin e Usuários
 #pragma once
 
 #include <Arduino.h>
-#include <map>
+#include <unordered_map>  // FIXED: Changed from map to unordered_map to match implementation
 #include <vector>
 #include "config.h"
 #include <ESPAsyncWebServer.h>
@@ -38,8 +38,8 @@ struct LoginAttempt {
 
 class AuthManager {
 private:
-    std::map<String, String> adminCredentials;
-    std::map<String, String> userCredentials;
+    std::unordered_map<String, String> adminCredentials;
+    std::unordered_map<String, String> userCredentials;
     std::vector<AuthSession> activeSessions;
     std::vector<LoginAttempt> loginAttempts;
     

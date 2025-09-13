@@ -124,7 +124,7 @@ void RFIDManager::loop() {
     String userName = "";
     
     // Verificar se é a chave mestra
-    if (uid.equalsIgnoreCase(UID_MESTRE)) {
+    if (uid.equalsIgnoreCase(MASTER_UID)) {
         result = RFID_MASTER_KEY;
         userName = "MASTER";
         processMasterKey();
@@ -322,7 +322,7 @@ void RFIDManager::processMasterKey() {
     
     // Log do evento
     if (logger) {
-        logger->logRFIDEvent(UID_MESTRE, "MASTER", "REABASTECIMENTO", true);
+        logger->logRFIDEvent(MASTER_UID, "MASTER", "REABASTECIMENTO", true);
         logger->logSystemEvent("Reabastecimento via chave mestra");
     }
     
