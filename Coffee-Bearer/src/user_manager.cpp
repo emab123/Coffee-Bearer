@@ -1,6 +1,7 @@
 #include "user_manager.h"
 #include <Preferences.h>
 #include <algorithm>
+#include <ArduinoJson.h>
 
 UserManager::UserManager() : 
     lastWeeklyReset(0),
@@ -462,4 +463,36 @@ int UserManager::findUserByUID(const String& uid) {
         }
     }
     return -1;
+}
+
+// Converte um único usuário para JSON
+String UserManager::userToJson(const UserCredits &user) {
+    StaticJsonDocument<256> doc;
+    doc["uid"] = user.uid;
+    doc["name"] = user.name;
+    doc["credits"] = user.credits;
+    doc["lastUsed"] = user.lastUsed;
+    doc["isActive"] = user.isActive;
+    String out;
+    serializeJson(doc, out);
+    return out;
+}
+
+// Lista todos os usuários em JSON
+String UserManager::listUsersJson() {
+    StaticJsonDocument<1024> doc;   // tamanho ajustável
+    JsonArray arr = doc.createNestedArray("users");
+
+    for (const auto &user : users) {
+        JsonObject obj = arr.createNestedObject();
+        obj["uid"] = user.uid;
+        obj["name"] = user.name;
+        obj["credits"] = user.credits;
+        obj["lastUsed"] = user.lastUsed;
+        obj["isActive"] = user.isActive;
+    }
+
+    String out;
+    serializeJson(doc, out);
+    return out;
 }

@@ -66,6 +66,11 @@ public:
     void updateLastUsed(const String& uid);
     bool isValidUID(const String& uid);
     String sanitizeName(const String& name);
+
+    // Serialização para API
+    String listUsersJson();
+    String userToJson(const UserCredits &user);
+
     
     // Backup/Restore
     String exportUsers();

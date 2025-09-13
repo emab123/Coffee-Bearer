@@ -11,6 +11,7 @@ Sistema de login para Admin e Usuários
 #include <map>
 #include <vector>
 #include "config.h"
+#include <ESPAsyncWebServer.h>
 
 enum UserRole {
     ROLE_GUEST = 0,
@@ -88,6 +89,9 @@ public:
     // Utilitários
     String roleToString(UserRole role);
     UserRole stringToRole(const String& roleStr);
+    String getSessionIdFromRequest(AsyncWebServerRequest *req);
+    String getUserRoleFromRequest(AsyncWebServerRequest *req);
+    bool isAuthenticated(AsyncWebServerRequest *req, UserRole minimumRole = ROLE_USER);
     
     // Manutenção (deve ser chamado periodicamente)
     void maintenance();

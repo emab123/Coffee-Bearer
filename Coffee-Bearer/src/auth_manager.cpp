@@ -419,6 +419,25 @@ void AuthManager::cleanupOldAttempts() {
     );
 }
 
+String AuthManager::getSessionIdFromRequest(AsyncWebServerRequest *req) {
+    if (!req->hasHeader("Cookie")) return "";
+    String cookie = req->header("Cookie");
+    return extractSessionFromCookie(cookie);
+}
+
+bool AuthManager::isAuthenticated(AsyncWebServerRequest *req, UserRole minimumRole) {
+    String sessionId = getSessionIdFromRequest(req);
+    if (sessionId.isEmpty()) return false;
+    return requireAuth(sessionId, minimumRole);
+}
+
+String AuthManager::getUserRoleFromRequest(AsyncWebServerRequest *req) {
+    String sessionId = getSessionIdFromRequest(req);
+    if (sessionId.isEmpty()) return "";
+    UserRole role = getSessionRole(sessionId);
+    return roleToString(role);
+}
+
 LoginAttempt* AuthManager::findLoginAttempt(const String& ip) {
     for (auto& attempt : loginAttempts) {
         if (attempt.ipAddress == ip) {

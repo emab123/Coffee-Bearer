@@ -16,12 +16,13 @@ Admin/Usuário, Autenticação e LED Neopixel
 // Inclusão dos módulos customizados
 #include "config.h"
 #include "RFID_manager.h"
+#include "led_controller.h"
+#include "auth_manager.h"
+#include "logger.h"
 #include "user_manager.h"
 #include "coffee_controller.h"
 #include "web_server.h"
-#include "led_controller.h"
-#include "logger.h"
-#include "auth_manager.h"
+
 
 // Instâncias globais
 AsyncWebServer server(80);
@@ -32,7 +33,8 @@ NTPClient timeClient(ntpUDP, NTP_SERVER, GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC);
 RFIDManager rfidManager;
 UserManager userManager;
 CoffeeController coffeeController;
-WebServerManager webServer(server);
+AuthManager authManager;
+WebServerManager webServer(authManager, logger, userManager, coffeeController);
 LEDController ledController;
 Logger logger;
 AuthManager authManager;
