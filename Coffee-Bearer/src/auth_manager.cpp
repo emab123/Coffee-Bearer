@@ -3,9 +3,6 @@
 #include <WiFi.h>
 #include <mbedtls/md.h>
 
-AuthManager::AuthManager() {
-}
-
 bool AuthManager::begin() {
     // Carregar credenciais salvas ou usar padrões
     Preferences prefs;
