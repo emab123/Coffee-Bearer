@@ -32,6 +32,11 @@ bool LEDController::begin() {
 
 // --- MÉTODOS DE ESTADO CONTÍNUO ---
 // Estes métodos cancelam qualquer animação e definem a cor de fundo.
+void LEDController::showStatusInitializing() {
+    currentAnimation = ANIM_NONE;
+    continuousColor = COLOR_BLUE;
+}
+
 void LEDController::showStatusOK() {
     currentAnimation = ANIM_NONE;
     continuousColor = COLOR_GREEN;
@@ -62,16 +67,32 @@ void LEDController::signalServing() {
 }
 
 void LEDController::signalNoCredits() {
-    currentAnimation = ANIM_BLINK;
+    currentAnimation = ANIM_ALTERNATE;
     animColor1 = COLOR_RED;
+    animColor2 = COLOR_BLUE;
+    animationStartTime = millis();
+    animStep = 0;
+}
+
+void LEDController::signalMasterKey() {
+    currentAnimation = ANIM_ALTERNATE;
+    animColor1 = COLOR_YELLOW;
+    animColor2 = COLOR_BLUE;
     animationStartTime = millis();
     animStep = 0;
 }
 
 void LEDController::signalUnknownUser() {
     currentAnimation = ANIM_ALTERNATE;
-    animColor1 = COLOR_YELLOW;
-    animColor2 = COLOR_RED;
+    animColor1 = COLOR_RED;
+    animColor2 = COLOR_YELLOW;
+    animationStartTime = millis();
+    animStep = 0;
+}
+
+void LEDController::signalError() {
+    currentAnimation = ANIM_BLINK;
+    animColor1 = COLOR_RED;
     animationStartTime = millis();
     animStep = 0;
 }

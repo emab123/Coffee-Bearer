@@ -111,7 +111,7 @@ void connectWiFi() {
     } else {
         Serial.println(F("\nFalha na conexão WiFi!"));
         logger.error("Falha na conexão WiFi");
-        ledController.setError();
+        ledController.showStatusEmpty();
     }
 }
 
@@ -258,7 +258,7 @@ void handleAddUserCommand(String originalCmd) {
 
 void performFactoryReset() {
     Serial.println("Executando reset de fábrica...");
-    ledController.setError();
+    ledController.signalServing();
     
     // Limpar dados dos usuários
     userManager.clearAllData();
@@ -291,9 +291,9 @@ void checkWeeklyReset() {
         Serial.println("Executando reset semanal de créditos...");
         userManager.performWeeklyReset();
         logger.info("Reset semanal de créditos executado");
-        ledController.setSuccess();
+        ledController.signalServing();
         delay(2000);
-        ledController.setReady();
+        ledController.showStatusOK();
     }
 }
 
@@ -319,7 +319,7 @@ void handleWiFiReconnection() {
     if (WiFi.status() != WL_CONNECTED) {
         if (millis() - lastReconnectAttempt > 30000) { // Tenta reconectar a cada 30s
             Serial.println("WiFi desconectado. Tentando reconectar...");
-            ledController.setConnecting();
+            ledController.showStatusInitializing();
             WiFi.reconnect();
             lastReconnectAttempt = millis();
         }
