@@ -439,30 +439,19 @@ void RFIDManager::showResultLED(RFIDResult result) {
     
     switch (result) {
         case RFID_SUCCESS:
-            ledController->setSuccess();
-            // Retornar ao estado normal após 2 segundos
+            ledController->signalServing();
             break;
-            
         case RFID_MASTER_KEY:
-            // Flash especial para chave mestra
-            ledController->flashColor(COLOR_SUCCESS, 3);
+            ledController->signalMasterKey();
             break;
-            
-        case RFID_NO_COFFEE:
-            ledController->setEmpty();
-            break;
-            
-        case RFID_SYSTEM_BUSY:
-            ledController->setServing();
-            break;
-            
         case RFID_ACCESS_DENIED:
+            ledController->signalUnknownUser();
+            break;
         case RFID_NO_CREDITS:
-        case RFID_ERROR:
+            ledController->signalNoCredits();
+            break;
         default:
-            ledController->setError();
-            // Flash de erro
-            ledController->flashColor(COLOR_ERROR, 2);
+            ledController->signalError();
             break;
     }
 }

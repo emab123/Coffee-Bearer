@@ -52,7 +52,9 @@ public:
     // --- MÉTODOS DE SINALIZAÇÃO (NÃO-BLOQUEANTES) ---
     void signalServing();
     void signalNoCredits();
+    void signalMasterKey();
     void signalUnknownUser();
+    void signalError();
 
     // Loop de atualização (DEVE ser chamado a cada ciclo do loop principal)
     void update();
