@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meu Perfil - Cafeteira RFID</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="app-title">
+                <div class="coffee-icon">☕</div>
+                <div>
+                    <h1>Cafeteira RFID</h1>
+                    <p class="version">Meu Perfil v4.0</p>
+                </div>
+            </div>
+            <div class="user-info">
+                <div class="user-avatar">U</div>
+                <div>
+                    <div class="user-name">Usuário</div>
+                    <div class="user-role">Usuário</div>
+                </div>
+                <button class="logout-btn" onclick="logout()">Sair</button>
+            </div>
+        </header>
+
+        <nav class="app-nav">
+            <ul class="nav-tabs">
+                <li class="nav-tab"><a href="/user/dashboard">Meu Painel</a></li>
+                <li class="nav-tab active"><a href="/user/profile">Meu Perfil</a></li>
+                <li class="nav-tab"><a href="/user/history">Histórico</a></li>
+            </ul>
+        </nav>
+
+        <main class="app-main">
+            <div id="alertContainer"></div>
+
+            <section class="profile-section">
+                <h2 class="section-title">Gerenciamento do seu Perfil</h2>
+                <div class="form-grid">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">👤 Suas Informações</h3>
+                        </div>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <label>Nome de Usuário:</label>
+                                <span id="infoUsername">Carregando...</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Seu UID RFID:</label>
+                                <code id="infoUserUID">Carregando...</code>
+                            </div>
+                             <div class="info-item">
+                                <label>Sessão iniciada em:</label>
+                                <span id="infoSessionStart">Carregando...</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Endereço IP:</label>
+                                <span id="infoIPAddress">Carregando...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">🔑 Alterar Senha</h3>
+                        </div>
+                        <form id="changePasswordForm">
+                            <div class="form-group">
+                                <label class="form-label" for="oldPassword">Senha Atual</label>
+                                <input type="password" id="oldPassword" class="form-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="newPassword">Nova Senha</label>
+                                <input type="password" id="newPassword" class="form-input" required minlength="6">
+                                <small class="form-help">Mínimo de 6 caracteres.</small>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="confirmPassword">Confirmar Nova Senha</label>
+                                <input type="password" id="confirmPassword" class="form-input" required>
+                            </div>
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-primary">
+                                    💾 Salvar Nova Senha
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <div class="loading-text">Processando...</div>
+    </div>
+    
+    <script src="/js/app.js"></script>
+    <script src="/js/user.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if(typeof initUserProfilePage === 'function') {
+                initUserProfilePage();
+            } else {
+                console.error("Função initUserProfilePage não encontrada em /js/user.js");
+                // Fallback para demonstração
+                checkAuth();
+                handleProfileUpdate(generateFakeProfileData());
+            }
+
+            // Adiciona o listener para o formulário
+            document.getElementById('changePasswordForm').addEventListener('submit', handleChangePassword);
+        });
+
+        // Esta função será chamada a partir de user.js quando os dados do perfil chegarem
+        function handleProfileUpdate(data) {
+            document.getElementById('infoUsername').textContent = data.username;
+            document.getElementById('infoUserUID').textContent = data.uid;
+            document.getElementById('infoSessionStart').textContent = new Date(data.sessionStart).toLocaleString('pt-BR');
+            document.getElementById('infoIPAddress').textContent = data.ipAddress;
+
+            // Atualiza o header também
+            document.querySelectorAll('.user-name').forEach(el => el.textContent = data.username);
+        }
+
+        function handleChangePassword(event) {
+            event.preventDefault();
+            const oldPassword = document.getElementById('oldPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+
+            if (newPassword !== confirmPassword) {
+                showAlert('A nova senha e a confirmação não são iguais.', 'error');
+                return;
+            }
+
+            if (newPassword.length < 6) {
+                showAlert('A nova senha deve ter no mínimo 6 caracteres.', 'error');
+                return;
+            }
+
+            console.log("Enviando solicitação para alterar senha...");
+            showLoading(true);
+
+            // Lógica de envio via WebSocket (a ser implementada em user.js)
+            // sendWebSocketMessage('change_password', { oldPassword, newPassword });
+
+            // Simulação de resposta do servidor
+            setTimeout(() => {
+                showLoading(false);
+                // Simular sucesso
+                showAlert('Senha alterada com sucesso! Você será desconectado por segurança.', 'success');
+                document.getElementById('changePasswordForm').reset();
+                setTimeout(() => logout(), 3000);
+                
+                // Simular erro
+                // showAlert('Senha atual incorreta. Tente novamente.', 'error');
+            }, 1500);
+        }
+        
+        // --- FUNÇÃO DE DADOS FALSOS (REMOVER EM PRODUÇÃO) ---
+        function generateFakeProfileData() {
+            return {
+                username: "Carlos Pereira",
+                uid: "I9 J0 K1 L2",
+                sessionStart: Date.now() - 2 * 60 * 60 * 1000, // 2 horas atrás
+                ipAddress: "192.168.1.105"
+            };
+        }
+    </script>
+</body>
+</html>

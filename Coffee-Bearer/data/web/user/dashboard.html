@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meu Painel - Cafeteira RFID</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="app-title">
+                <div class="coffee-icon">☕</div>
+                <div>
+                    <h1>Cafeteira RFID</h1>
+                    <p class="version">Meu Painel v4.0</p>
+                </div>
+            </div>
+            <div class="user-info">
+                <div class="user-avatar">U</div>
+                <div>
+                    <div class="user-name">Usuário</div>
+                    <div class="user-role">Usuário</div>
+                </div>
+                <button class="logout-btn" onclick="logout()">Sair</button>
+            </div>
+        </header>
+
+        <nav class="app-nav">
+            <ul class="nav-tabs">
+                <li class="nav-tab active"><a href="/user/dashboard">Meu Painel</a></li>
+                <li class="nav-tab"><a href="/user/profile">Meu Perfil</a></li>
+                <li class="nav-tab"><a href="/user/history">Histórico</a></li>
+            </ul>
+        </nav>
+
+        <main class="app-main">
+            <div id="alertContainer"></div>
+
+            <section class="welcome-message">
+                <h2 class="section-title">Olá, <span class="user-name">Usuário</span>!</h2>
+                <p>Bem-vindo ao seu painel. Aqui estão suas informações mais recentes.</p>
+            </section>
+            
+            <section class="user-stats">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-number" id="creditsRemaining">0</span>
+                        <span class="stat-label">Créditos Restantes</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" id="totalConsumed">0</span>
+                        <span class="stat-label">Total de Cafés Consumidos</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" id="lastUsed">N/A</span>
+                        <span class="stat-label">Último Café</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="how-to-use">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Como Pegar seu Café ☕</h3>
+                    </div>
+                    <p>É simples! Aproxime seu cartão ou tag RFID do leitor na cafeteira. Se você tiver créditos, seu café será servido automaticamente.</p>
+                    <div class="progress-container mt-md">
+                        <div id="creditsProgressBar" class="progress-bar" style="width: 0%;"></div>
+                    </div>
+                    <p id="creditsProgressLabel" class="text-center mt-sm">Você tem 0 de 10 créditos.</p>
+                </div>
+            </section>
+
+            <section class="recent-activity">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Sua Atividade Recente</h3>
+                        <button class="btn btn-sm btn-outline" onclick="refreshUserData()">
+                            🔄 Atualizar
+                        </button>
+                    </div>
+                    <div class="activity-list" id="activityList">
+                        <div class="activity-loading">Carregando seu histórico...</div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <div class="loading-text">Carregando...</div>
+    </div>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/user.js"></script>
+
+    <script>
+        // Inicialização da página de dashboard do usuário
+        document.addEventListener('DOMContentLoaded', function() {
+            // Esta função deve estar em /js/user.js
+            if(typeof initUserDashboard === 'function') {
+                initUserDashboard();
+            } else {
+                console.error("Função initUserDashboard não encontrada. Verifique se /js/user.js está carregado.");
+                // Fallback para demonstração
+                checkAuth();
+                handleUserDashboardUpdate(generateFakeUserData());
+            }
+        });
+
+        // Esta função será chamada a partir de user.js quando os dados chegarem via WebSocket
+        function handleUserDashboardUpdate(data) {
+            console.log("Atualizando dashboard do usuário com dados:", data);
+            
+            // Atualiza os cards de estatísticas
+            document.getElementById('creditsRemaining').textContent = data.credits;
+            document.getElementById('totalConsumed').textContent = data.totalConsumed;
+            document.getElementById('lastUsed').textContent = data.lastUsed ? formatDateTime(data.lastUsed) : 'Nunca';
+
+            // Atualiza a barra de progresso de créditos
+            const progress = (data.credits / (data.initialCredits || 10)) * 100;
+            document.getElementById('creditsProgressBar').style.width = `${Math.min(progress, 100)}%`;
+            document.getElementById('creditsProgressLabel').textContent = `Você tem ${data.credits} de ${data.initialCredits || 10} créditos.`;
+            
+            // Atualiza a lista de atividades recentes
+            const activityList = document.getElementById('activityList');
+            if (data.history && data.history.length > 0) {
+                activityList.innerHTML = data.history.map(item => `
+                    <div class="activity-item">
+                        <div class="activity-icon">☕</div>
+                        <div class="activity-content">
+                            <div class="activity-text">${item.action}</div>
+                            <div class="activity-time">${formatDateTime(item.timestamp)}</div>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                activityList.innerHTML = '<div class="activity-item text-center">Nenhuma atividade registrada ainda.</div>';
+            }
+        }
+        
+        function refreshUserData() {
+             // Em uma implementação real, isso enviaria uma mensagem via WebSocket
+             // sendWebSocketMessage('get_user_dashboard_data', {});
+             showAlert('Atualizando dados...', 'info');
+             showLoading(true);
+             setTimeout(() => {
+                handleUserDashboardUpdate(generateFakeUserData());
+                showLoading(false);
+             }, 500);
+        }
+
+        // --- FUNÇÃO DE DADOS FALSOS (REMOVER EM PRODUÇÃO) ---
+        function generateFakeUserData() {
+            return {
+                username: "Carlos Pereira",
+                credits: 7,
+                initialCredits: 10,
+                totalConsumed: 23,
+                lastUsed: Date.now() - 3 * 60 * 60 * 1000, // 3 horas atrás
+                history: [
+                    { action: "Café consumido", timestamp: Date.now() - 3 * 60 * 60 * 1000 },
+                    { action: "Café consumido", timestamp: Date.now() - 25 * 60 * 60 * 1000 },
+                    { action: "Créditos resetados", timestamp: Date.now() - 5 * 24 * 60 * 60 * 1000 },
+                    { action: "Café consumido", timestamp: Date.now() - 6 * 24 * 60 * 60 * 1000 },
+                ]
+            };
+        }
+    </script>
+</body>
+</html>

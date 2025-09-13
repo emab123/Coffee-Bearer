@@ -1,4 +1,5 @@
 #include "RFID_manager.h"
+#include "credentials.h"
 
 extern UserManager userManager;
 extern CoffeeController coffeeController;
@@ -123,7 +124,7 @@ void RFIDManager::loop() {
     String userName = "";
     
     // Verificar se é a chave mestra
-    if (uid.equalsIgnoreCase(MASTER_UID)) {
+    if (uid.equalsIgnoreCase(UID_MESTRE)) {
         result = RFID_MASTER_KEY;
         userName = "MASTER";
         processMasterKey();
@@ -217,7 +218,7 @@ void RFIDManager::printRFIDInfo() {
     DEBUG_PRINTF("Pino SS: %d\n", RFID_SS_PIN);
     DEBUG_PRINTF("Pino RST: %d\n", RFID_RST_PIN);
     DEBUG_PRINTF("Cooldown: %lu ms\n", COOLDOWN_TIME_MS);
-    DEBUG_PRINTF("Master UID: %s\n", MASTER_UID);
+    DEBUG_PRINTF("Master UID: %s\n", UID_MESTRE);
     DEBUG_PRINTF("Status: %s\n", isReady() ? "Pronto" : "Não Pronto");
     
     DEBUG_PRINTLN("=================================\n");
@@ -321,7 +322,7 @@ void RFIDManager::processMasterKey() {
     
     // Log do evento
     if (logger) {
-        logger->logRFIDEvent(MASTER_UID, "MASTER", "REABASTECIMENTO", true);
+        logger->logRFIDEvent(UID_MESTRE, "MASTER", "REABASTECIMENTO", true);
         logger->logSystemEvent("Reabastecimento via chave mestra");
     }
     
