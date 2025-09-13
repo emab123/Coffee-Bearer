@@ -43,6 +43,31 @@ unsigned long lastResetCheck = 0;
 unsigned long lastStatusUpdate = 0;
 bool systemInitialized = false;
 
+void connectWiFi() {
+    
+    Serial.printf("Conectando ao WiFi: %s\n", WIFI_SSID);
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    
+    int attempts = 0;
+    while (WiFi.status() != WL_CONNECTED && attempts < 30) {
+        delay(1000);
+        Serial.print(".");
+        ledController.update();
+        attempts++;
+    }
+    
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.println(F("\nWiFi conectado!"));
+        Serial.printf("IP: %s\n", WiFi.localIP().toString().c_str());
+        logger.info("WiFi conectado - IP: " + WiFi.localIP().toString());
+    } else {
+        Serial.println(F("\nFalha na conexão WiFi!"));
+        logger.error("Falha na conexão WiFi");
+        ledController.showStatusEmpty();
+    }
+}
+
 void initializeSystem() {
     Serial.begin(115200);
     delay(2000);
@@ -90,29 +115,60 @@ void initializeSystem() {
     Serial.println(F("Digite 'help' para comandos disponíveis"));
     Serial.println(F("=================================================="));
 }
+void performFactoryReset() {
+    Serial.println("Executando reset de fábrica...");
+    ledController.signalServing();
+    
+    // Limpar dados dos usuários
+    userManager.clearAllData();
+    
+    // Limpar dados do controlador de café
+    coffeeController.clearAllData();
+    
+    // Limpar logs
+    logger.clearLogs();
+    
+    // Limpar autenticação
+    authManager.resetToDefault();
+    
+    logger.info("Reset de fábrica executado");
+    Serial.println("Reset de fábrica concluído. Reiniciando...");
+    
+    delay(2000);
+    ESP.restart();
+}
 
-void connectWiFi() {
-    
-    Serial.printf("Conectando ao WiFi: %s\n", WIFI_SSID);
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-    
-    int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 30) {
-        delay(1000);
-        Serial.print(".");
-        ledController.update();
-        attempts++;
+void handleAddUserCommand(String originalCmd) {
+    int firstSpace = originalCmd.indexOf(' ');
+    if (firstSpace == -1) {
+        Serial.println("Formato: add <uid> <nome>");
+        return;
     }
     
-    if (WiFi.status() == WL_CONNECTED) {
-        Serial.println(F("\nWiFi conectado!"));
-        Serial.printf("IP: %s\n", WiFi.localIP().toString().c_str());
-        logger.info("WiFi conectado - IP: " + WiFi.localIP().toString());
+    String remainder = originalCmd.substring(firstSpace + 1);
+    int secondSpace = remainder.indexOf(' ');
+    
+    if (secondSpace == -1) {
+        Serial.println("Formato: add <uid> <nome>");
+        return;
+    }
+    
+    String uid = remainder.substring(0, secondSpace);
+    String name = remainder.substring(secondSpace + 1);
+    
+    uid.trim();
+    uid.toUpperCase();
+    name.trim();
+    
+    if (uid.length() > 0 && name.length() > 0) {
+        if (userManager.addUser(uid, name)) {
+            Serial.printf("Usuário '%s' adicionado com sucesso!\n", name.c_str());
+            logger.info("Usuário adicionado via serial: " + name + " (UID: " + uid + ")");
+        } else {
+            Serial.println("Falha ao adicionar usuário!");
+        }
     } else {
-        Serial.println(F("\nFalha na conexão WiFi!"));
-        logger.error("Falha na conexão WiFi");
-        ledController.showStatusEmpty();
+        Serial.println("UID e nome não podem estar vazios!");
     }
 }
 
@@ -223,62 +279,6 @@ void processSerialCommands() {
     }
 }
 
-void handleAddUserCommand(String originalCmd) {
-    int firstSpace = originalCmd.indexOf(' ');
-    if (firstSpace == -1) {
-        Serial.println("Formato: add <uid> <nome>");
-        return;
-    }
-    
-    String remainder = originalCmd.substring(firstSpace + 1);
-    int secondSpace = remainder.indexOf(' ');
-    
-    if (secondSpace == -1) {
-        Serial.println("Formato: add <uid> <nome>");
-        return;
-    }
-    
-    String uid = remainder.substring(0, secondSpace);
-    String name = remainder.substring(secondSpace + 1);
-    
-    uid.trim();
-    uid.toUpperCase();
-    name.trim();
-    
-    if (uid.length() > 0 && name.length() > 0) {
-        if (userManager.addUser(uid, name)) {
-            Serial.printf("Usuário '%s' adicionado com sucesso!\n", name.c_str());
-            logger.info("Usuário adicionado via serial: " + name + " (UID: " + uid + ")");
-        } else {
-            Serial.println("Falha ao adicionar usuário!");
-        }
-    } else {
-        Serial.println("UID e nome não podem estar vazios!");
-    }
-}
-
-void performFactoryReset() {
-    Serial.println("Executando reset de fábrica...");
-    ledController.signalServing();
-    
-    // Limpar dados dos usuários
-    userManager.clearAllData();
-    
-    // Limpar dados do controlador de café
-    coffeeController.clearAllData();
-    
-    // Limpar logs
-    logger.clearLogs();
-    
-    // Limpar autenticação
-    authManager.resetToDefault();
-    
-    logger.info("Reset de fábrica executado");
-    Serial.println("Reset de fábrica concluído. Reiniciando...");
-    
-    delay(2000);
-    ESP.restart();
-}
 
 void checkWeeklyReset() {
     static unsigned long lastCheck = 0;
