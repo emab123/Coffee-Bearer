@@ -22,7 +22,6 @@ struct LogEntry {
 class Logger {
 private:
     std::vector<LogEntry> logBuffer;
-    File logFile;
     unsigned long lastFlush;
     bool fileLogging;
     bool serialLogging;

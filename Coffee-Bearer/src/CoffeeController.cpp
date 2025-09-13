@@ -214,9 +214,10 @@ void CoffeeController::printStats() {
     DEBUG_PRINTF("Cafés restantes: %d/%d\n", remainingCoffees, MAX_COFFEES);
     DEBUG_PRINTF("Total servido: %d cafés\n", totalServed);
     DEBUG_PRINTF("Servidos hoje: %d cafés\n", dailyCount);
-    DEBUG_PRINTF("Último café: %s\n", 
-        lastServed > 0 ? String(millis() - lastServed).c_str() + " ms atrás" : "Nunca");
-    DEBUG_PRINTF("Tempo médio de preparo: %.1f ms\n", getAverageServeTime());
+    String lastCoffeeText = lastServed > 0 ? 
+        String(millis() - lastServed) + " ms atrás" : 
+        "Nunca";
+    DEBUG_PRINTF("Último café: %s\n", lastCoffeeText.c_str());    DEBUG_PRINTF("Tempo médio de preparo: %.1f ms\n", getAverageServeTime());
     DEBUG_PRINTF("Tempo total de preparo: %lu ms\n", totalServeTime);
     DEBUG_PRINTLN("================================\n");
 }
