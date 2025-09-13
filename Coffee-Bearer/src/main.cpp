@@ -30,14 +30,13 @@ WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, NTP_SERVER, GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC);
 
 // Managers
-RFIDManager rfidManager;
 UserManager userManager;
 CoffeeController coffeeController;
 AuthManager authManager;
-WebServerManager webServer(authManager, logger, userManager, coffeeController);
-LEDController ledController;
 Logger logger;
-AuthManager authManager;
+WebServerManager webServer(authManager, logger, userManager, coffeeController);
+RFIDManager rfidManager;
+LEDController ledController;
 
 // Variáveis de controle
 unsigned long lastResetCheck = 0;

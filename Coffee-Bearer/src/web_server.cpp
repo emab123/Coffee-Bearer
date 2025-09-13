@@ -129,8 +129,8 @@ void WebServerManager::setupApiRoutes() {
             req->send(401, "application/json", "{\"error\":\"Unauthorized\"}");
             return;
         }
-        this->coffeeController.serveCoffee();
-        req->send(200, "application/json", "{\"success\":true}");
+        bool success = this->coffeeController.serveCoffee("WEB_MANUAL", nullptr);
+        req->send(200, "application/json", String("{\"success\":") + (success ? "true" : "false") + "}");
     });
 
     server.on("/api/logs", HTTP_GET, [this](AsyncWebServerRequest *req) {
