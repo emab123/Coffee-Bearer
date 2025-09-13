@@ -1,0 +1,200 @@
+/*
+==================================================
+CONFIGURAÇÕES CENTRALIZADAS DO SISTEMA
+==================================================
+*/
+
+#pragma once
+
+#include <Arduino.h>
+
+// ============== VERSÃO DO SISTEMA ==============
+#define SYSTEM_VERSION "4.0.0"
+#define SYSTEM_NAME "Cafeteira RFID Inteligente"
+
+// ============== CONFIGURAÇÕES DE HARDWARE ==============
+// Pinos RFID
+#define RFID_RST_PIN 4
+#define RFID_SS_PIN 5
+
+// Pinos de controle
+#define BUZZER_PIN 15
+#define RELAY_PIN 13
+#define NEOPIXEL_PIN 2
+#define NEOPIXEL_COUNT 8
+
+// ============== CONFIGURAÇÕES DE REDE ==============
+// Definidas em credentials.h
+#ifndef WIFI_SSID
+    #define WIFI_SSID "SUA_REDE_AQUI"
+    #define WIFI_PASSWORD "SUA_SENHA_AQUI"
+    #warning "Defina WIFI_SSID e WIFI_PASSWORD em credentials.h"
+#endif
+
+// NTP
+#define NTP_SERVER "pool.ntp.org"
+#define GMT_OFFSET_SEC -10800  // GMT-3 (Brasília)
+#define DAYLIGHT_OFFSET_SEC 0
+
+// ============== CONFIGURAÇÕES DO SISTEMA ==============
+// Limites
+#define MAX_USERS 50
+#define MAX_COFFEES 100
+#define INITIAL_CREDITS 10
+#define COFFEE_SERVE_TIME_MS 8000
+#define COOLDOWN_TIME_MS 3000
+
+// Timings
+#define WEEKLY_RESET_INTERVAL_MS (7UL * 24UL * 60UL * 60UL * 1000UL)  // 7 dias
+#define WEEKLY_RESET_CHECK_INTERVAL (60UL * 60UL * 1000UL)            // 1 hora
+#define DATA_SAVE_INTERVAL_MS (5UL * 60UL * 1000UL)                   // 5 minutos
+
+// UID da chave mestra (definir em credentials.h)
+#ifndef MASTER_UID
+    #define MASTER_UID "FF FF FF FF"
+    #warning "Defina MASTER_UID em credentials.h"
+#endif
+
+// ============== CONFIGURAÇÕES DE AUTENTICAÇÃO ==============
+// Credenciais padrão (devem ser alteradas)
+#define DEFAULT_ADMIN_USER "admin"
+#define DEFAULT_ADMIN_PASS "cafeteira123"
+#define DEFAULT_USER_USER "usuario"
+#define DEFAULT_USER_PASS "cafe123"
+
+// Configuração de sessão
+#define SESSION_TIMEOUT_MS (30UL * 60UL * 1000UL)  // 30 minutos
+#define MAX_LOGIN_ATTEMPTS 5
+#define LOCKOUT_TIME_MS (15UL * 60UL * 1000UL)     // 15 minutos
+
+// ============== CONFIGURAÇÕES DE LOG ==============
+#define MAX_LOG_ENTRIES 500
+#define LOG_FILE_PATH "/system.log"
+#define BACKUP_LOG_FILE_PATH "/system_backup.log"
+
+// Níveis de log
+enum LogLevel {
+    LOG_DEBUG = 0,
+    LOG_INFO = 1,
+    LOG_WARNING = 2,
+    LOG_ERROR = 3,
+    LOG_CRITICAL = 4
+};
+
+#ifndef DEBUG_MODE
+    #define DEBUG_MODE 0
+#endif
+
+#if DEBUG_MODE
+    #define DEBUG_LOG_LEVEL LOG_DEBUG
+#else
+    #define DEBUG_LOG_LEVEL LOG_INFO
+#endif
+
+// ============== CONFIGURAÇÕES DE LED NEOPIXEL ==============
+// Cores (formato RGB)
+#define COLOR_OFF           0x000000
+#define COLOR_READY         0x00FF00  // Verde
+#define COLOR_SERVING       0xFFFF00  // Amarelo
+#define COLOR_ERROR         0xFF0000  // Vermelho
+#define COLOR_EMPTY         0xFF8000  // Laranja
+#define COLOR_CONNECTING    0x0000FF  // Azul
+#define COLOR_INITIALIZING  0x8000FF  // Roxo
+#define COLOR_SUCCESS       0x00FFFF  // Ciano
+
+// Padrões de animação
+#define LED_ANIMATION_SPEED 100  // ms entre frames
+#define LED_FADE_STEPS 20
+#define LED_PULSE_STEPS 50
+
+// ============== CONFIGURAÇÕES DE ÁUDIO ==============
+// Frequências dos tons
+#define TONE_SUCCESS_FREQ1  1200
+#define TONE_SUCCESS_FREQ2  1500
+#define TONE_SUCCESS_DURATION 80
+
+#define TONE_ERROR_FREQ     300
+#define TONE_ERROR_DURATION 400
+
+#define TONE_STARTUP_FREQ1  800
+#define TONE_STARTUP_FREQ2  1000
+#define TONE_STARTUP_FREQ3  1200
+#define TONE_STARTUP_DURATION 60
+
+#define TONE_COFFEE_FREQ1   1300
+#define TONE_COFFEE_FREQ2   1600
+#define TONE_COFFEE_DURATION 100
+
+#define TONE_REFILL_FREQ1   1500
+#define TONE_REFILL_FREQ2   1800
+#define TONE_REFILL_FREQ3   2200
+
+// ============== CONFIGURAÇÕES WEB ==============
+// Portas
+#define WEB_SERVER_PORT 80
+#define WEBSOCKET_PORT 81
+
+// Caminhos dos arquivos web
+#define WEB_ROOT_PATH "/web"
+#define ADMIN_PATH "/admin"
+#define USER_PATH "/user"
+
+// Tipos de conteúdo MIME
+#define MIME_HTML "text/html"
+#define MIME_CSS "text/css"
+#define MIME_JS "text/javascript"
+#define MIME_JSON "application/json"
+#define MIME_PNG "image/png"
+#define MIME_ICO "image/x-icon"
+
+// ============== CONFIGURAÇÕES DE BACKUP ==============
+#define ENABLE_AUTO_BACKUP true
+#define BACKUP_INTERVAL_MS (24UL * 60UL * 60UL * 1000UL)  // 24 horas
+#define MAX_BACKUP_FILES 7  // Manter 7 dias de backup
+
+// ============== MACROS UTILITÁRIAS ==============
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+
+// Debug condicional
+#if DEBUG_MODE
+    #define DEBUG_PRINT(x) Serial.print(x)
+    #define DEBUG_PRINTLN(x) Serial.println(x)
+    #define DEBUG_PRINTF(format, ...) Serial.printf(format, __VA_ARGS__)
+#else
+    #define DEBUG_PRINT(x)
+    #define DEBUG_PRINTLN(x)
+    #define DEBUG_PRINTF(format, ...)
+#endif
+
+// Validação de configuração em tempo de compilação
+static_assert(MAX_USERS > 0, "MAX_USERS deve ser maior que 0");
+static_assert(MAX_COFFEES > 0, "MAX_COFFEES deve ser maior que 0");
+static_assert(INITIAL_CREDITS > 0, "INITIAL_CREDITS deve ser maior que 0");
+static_assert(NEOPIXEL_COUNT > 0, "NEOPIXEL_COUNT deve ser maior que 0");
+
+// ============== ESTRUTURAS DE DADOS ==============
+struct SystemStatus {
+    bool wifiConnected;
+    bool rfidReady;
+    bool systemBusy;
+    int totalUsers;
+    int remainingCoffees;
+    int totalServed;
+    unsigned long uptime;
+    String lastEvent;
+    unsigned long lastEventTime;
+};
+
+struct UserCredits {
+    String uid;
+    String name;
+    int credits;
+    unsigned long lastUsed;
+    bool isActive;
+};
+
+// ============== CONSTANTES CALCULADAS ==============
+const unsigned long MILLIS_PER_DAY = 24UL * 60UL * 60UL * 1000UL;
+const unsigned long MILLIS_PER_HOUR = 60UL * 60UL * 1000UL;
+const unsigned long MILLIS_PER_MINUTE = 60UL * 1000UL;
