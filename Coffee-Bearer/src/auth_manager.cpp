@@ -3,6 +3,10 @@
 #include <WiFi.h>
 #include <mbedtls/md.h>
 
+AuthManager::AuthManager() {
+    // Constructor - vectors are automatically initialized
+}
+
 bool AuthManager::begin() {
     // Carregar credenciais salvas ou usar padrões
     Preferences prefs;
@@ -23,7 +27,8 @@ bool AuthManager::begin() {
         prefs.begin("auth", true);
     }
     
-    adminCredentials[adminUser] = adminPass;
+    adminCredentials.clear();
+    adminCredentials.push_back(std::make_pair(adminUser, adminPass));
     
     // Carregar credenciais de usuário
     String userUser = prefs.getString("user_user", DEFAULT_USER_USER);
@@ -40,7 +45,8 @@ bool AuthManager::begin() {
         prefs.begin("auth", true);
     }
     
-    userCredentials[userUser] = userPass;
+    userCredentials.clear();
+    userCredentials.push_back(std::make_pair(userUser, userPass));
     prefs.end();
     
     DEBUG_PRINTLN("Auth Manager inicializado");
@@ -78,7 +84,7 @@ bool AuthManager::setAdminCredentials(const String& username, const String& pass
     prefs.end();
     
     adminCredentials.clear();
-    adminCredentials[username] = hashedPassword;
+    adminCredentials.push_back(std::make_pair(username, hashedPassword));
     
     // Terminar sessões existentes do admin
     terminateSessionsForUser(username);
@@ -100,7 +106,7 @@ bool AuthManager::setUserCredentials(const String& username, const String& passw
     prefs.end();
     
     userCredentials.clear();
-    userCredentials[username] = hashedPassword;
+    userCredentials.push_back(std::make_pair(username, hashedPassword));
     
     // Terminar sessões existentes do usuário
     terminateSessionsForUser(username);
@@ -114,15 +120,15 @@ bool AuthManager::changePassword(const String& username, const String& oldPasswo
     }
     
     // Verificar senha antiga
-    bool isAdmin = adminCredentials.count(username) > 0;
-    bool isUser = userCredentials.count(username) > 0;
+    bool isAdmin = hasAdminCredentials(username);
+    bool isUser = hasUserCredentials(username);
     
     if (!isAdmin && !isUser) {
         return false;
     }
     
-    String storedHash = isAdmin ? adminCredentials[username] : userCredentials[username];
-    if (!verifyPassword(oldPassword, storedHash)) {
+    String storedHash = isAdmin ? findAdminPassword(username) : findUserPassword(username);
+    if (storedHash.length() == 0 || !verifyPassword(oldPassword, storedHash)) {
         return false;
     }
     
@@ -144,18 +150,18 @@ String AuthManager::login(const String& username, const String& password, const 
     UserRole role = ROLE_GUEST;
     String storedHash = "";
     
-    if (adminCredentials.count(username) > 0) {
-        storedHash = adminCredentials[username];
+    if (hasAdminCredentials(username)) {
+        storedHash = findAdminPassword(username);
         role = ROLE_ADMIN;
-    } else if (userCredentials.count(username) > 0) {
-        storedHash = userCredentials[username];
+    } else if (hasUserCredentials(username)) {
+        storedHash = findUserPassword(username);
         role = ROLE_USER;
     } else {
         recordFailedLogin(ipAddress);
         return "";
     }
     
-    if (!verifyPassword(password, storedHash)) {
+    if (storedHash.length() == 0 || !verifyPassword(password, storedHash)) {
         recordFailedLogin(ipAddress);
         return "";
     }
@@ -350,7 +356,35 @@ void AuthManager::maintenance() {
     cleanupOldAttempts();
 }
 
-// Métodos privados
+// Private helper methods
+
+String AuthManager::findAdminPassword(const String& username) {
+    for (const auto& cred : adminCredentials) {
+        if (cred.first == username) {
+            return cred.second;
+        }
+    }
+    return "";
+}
+
+String AuthManager::findUserPassword(const String& username) {
+    for (const auto& cred : userCredentials) {
+        if (cred.first == username) {
+            return cred.second;
+        }
+    }
+    return "";
+}
+
+bool AuthManager::hasAdminCredentials(const String& username) {
+    return findAdminPassword(username).length() > 0;
+}
+
+bool AuthManager::hasUserCredentials(const String& username) {
+    return findUserPassword(username).length() > 0;
+}
+
+// Métodos privados originais
 
 String AuthManager::generateSessionId() {
     String sessionId = "";
