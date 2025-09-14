@@ -1,4 +1,6 @@
 .pio
 .vscode
+data/*/*.gz
+data/*/*/*.gz
 /include/credentials.h
 sdkconfig.upesy_wrover
