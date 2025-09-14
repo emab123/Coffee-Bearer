@@ -37,6 +37,7 @@ private:
     unsigned long dailyResetTime;
     unsigned long lastSave;
     bool dataChanged;
+    unsigned long coffeeServeEndTime;
     
     void saveToPreferences();
     void loadFromPreferences();

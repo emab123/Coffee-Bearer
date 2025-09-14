@@ -83,44 +83,15 @@ bool CoffeeController::serveCoffee(const String& userName, int* userCredits) {
     
     DEBUG_PRINTF("Servindo café para: %s\n", userName.c_str());
     
-    // Marcar sistema como ocupado
     systemBusy = true;
-    
-    // Som indicando início do preparo
     playServingTone();
-    
-    unsigned long startTime = millis();
-    
-    // Ativar relé da cafeteira
+
+    // ✅ REPLACEMENT for delay()
     digitalWrite(RELAY_PIN, HIGH);
+    coffeeServeEndTime = millis() + COFFEE_SERVE_TIME_MS; // Set the end time
     DEBUG_PRINTLN("Relé ativado - preparando café...");
     
-    // Aguardar o tempo de preparo
-    delay(COFFEE_SERVE_TIME_MS);
-    
-    // Desativar relé
-    digitalWrite(RELAY_PIN, LOW);
-    DEBUG_PRINTLN("Relé desativado - café pronto!");
-    
-    unsigned long serveTime = millis() - startTime;
-    
-    // Atualizar estatísticas
-    remainingCoffees--;
-    totalServed++;
-    dailyCount++;
-    totalServeTime += serveTime;
-    lastServed = millis();
-    dataChanged = true;
-    
-    // Som de sucesso
-    playSuccessTone();
-    
-    // Sistema não está mais ocupado
-    systemBusy = false;
-    
-    DEBUG_PRINTF("Café servido com sucesso! Restam: %d\n", remainingCoffees);
-    DEBUG_PRINTF("Tempo de preparo: %lu ms\n", serveTime);
-    
+    // The function now returns immediately without blocking
     return true;
 }
 
@@ -248,20 +219,29 @@ unsigned long CoffeeController::getServeTime() {
 }
 
 void CoffeeController::maintenance() {
-    // Verificar reset diário
-    checkDailyReset();
-    
-    // Salvar dados se necessário
-    if (dataChanged && (millis() - lastSave > DATA_SAVE_INTERVAL_MS)) {
-        saveToPreferences();
+    if (systemBusy && millis() >= coffeeServeEndTime) {
+        digitalWrite(RELAY_PIN, LOW);
+        DEBUG_PRINTLN("Relé desativado - café pronto!");
+
+        // Update stats now that it's finished
+        remainingCoffees--;
+        totalServed++;
+        dailyCount++;
+        lastServed = millis();
+        dataChanged = true;
+
+        playSuccessTone();
+        systemBusy = false; // System is now free
+
+        DEBUG_PRINTF("Café servido com sucesso! Restam: %d\n", remainingCoffees);
     }
     
-    // Verificar se o relé está travado (possível falha)
-    static unsigned long lastBusyCheck = 0;
-    if (systemBusy && (millis() - lastBusyCheck > COFFEE_SERVE_TIME_MS * 2)) {
-        DEBUG_PRINTLN("AVISO: Sistema ocupado por muito tempo - executando parada de emergência");
-        emergencyStop();
-        lastBusyCheck = millis();
+    // Check daily reset
+    checkDailyReset();
+    
+    // Save data if necessary
+    if (dataChanged && (millis() - lastSave > DATA_SAVE_INTERVAL_MS)) {
+        saveToPreferences();
     }
 }
 
