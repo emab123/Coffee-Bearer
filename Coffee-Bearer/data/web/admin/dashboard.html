@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Admin - Cafeteira RFID</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="app-title">
+                <div class="coffee-icon">☕</div>
+                <div>
+                    <h1>Cafeteira RFID - Admin</h1>
+                    <p class="version">Dashboard Administrativo v4.0</p>
+                </div>
+            </div>
+            <div class="user-info">
+                <div class="user-avatar">A</div>
+                <div>
+                    <div class="user-name">Administrador</div>
+                    <div class="user-role">Admin</div>
+                </div>
+                <button class="logout-btn" onclick="logout()">Sair</button>
+            </div>
+        </header>
+
+        <nav class="app-nav">
+            <ul class="nav-tabs">
+                <li class="nav-tab active"><a href="/admin/dashboard">Dashboard</a></li>
+                <li class="nav-tab"><a href="/admin/users">Usuários</a></li>
+                <li class="nav-tab"><a href="/admin/settings">Configurações</a></li>
+                <li class="nav-tab"><a href="/admin/logs">Logs</a></li>
+                <li class="nav-tab"><a href="/admin/stats">Estatísticas</a></li>
+            </ul>
+        </nav>
+
+        <main class="app-main">
+            <!-- Sistema de Alertas -->
+            <div id="alertContainer"></div>
+
+            <!-- Estatísticas Principais -->
+            <section class="stats-section">
+                <h2 class="section-title">Status do Sistema</h2>
+                <div class="stats-grid" id="statsGrid">
+                    <!-- Stats serão carregadas dinamicamente -->
+                </div>
+            </section>
+
+            <!-- Controles Rápidos -->
+            <section class="quick-controls">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Controles Rápidos</h3>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-success" onclick="serveCoffee()">
+                            ☕ Servir Café Manual
+                        </button>
+                        <button class="btn btn-primary" onclick="refillCoffee()">
+                            🔄 Reabastecer Garrafa
+                        </button>
+                        <button class="btn btn-warning" onclick="resetSystem()">
+                            🔄 Reset Sistema
+                        </button>
+                        <button class="btn btn-secondary" onclick="exportData()">
+                            💾 Backup Dados
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Status em Tempo Real -->
+            <section class="realtime-status">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Status em Tempo Real</h3>
+                        <button class="btn btn-sm btn-outline" onclick="toggleAutoRefresh()">
+                            <span id="autoRefreshText">⏸️ Pausar</span>
+                        </button>
+                    </div>
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <div class="status-icon" id="systemStatusIcon">🟢</div>
+                            <div class="status-info">
+                                <div class="status-title">Sistema</div>
+                                <div class="status-value" id="systemStatusText">Online</div>
+                            </div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-icon" id="coffeeStatusIcon">☕</div>
+                            <div class="status-info">
+                                <div class="status-title">Café</div>
+                                <div class="status-value" id="coffeeStatusText">Pronto</div>
+                            </div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-icon" id="wifiStatusIcon">📶</div>
+                            <div class="status-info">
+                                <div class="status-title">WiFi</div>
+                                <div class="status-value" id="wifiStatusText">Conectado</div>
+                            </div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-icon" id="rfidStatusIcon">📱</div>
+                            <div class="status-info">
+                                <div class="status-title">RFID</div>
+                                <div class="status-value" id="rfidStatusText">Ativo</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Últimas Atividades -->
+            <section class="recent-activity">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Atividades Recentes</h3>
+                        <button class="btn btn-sm btn-outline" onclick="refreshActivity()">
+                            🔄 Atualizar
+                        </button>
+                    </div>
+                    <div class="activity-list" id="activityList">
+                        <div class="activity-loading">Carregando atividades...</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Usuários Ativos Hoje -->
+            <section class="active-users">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Usuários Ativos Hoje</h3>
+                        <span class="badge" id="activeUsersCount">0</span>
+                    </div>
+                    <div class="users-grid" id="activeUsersGrid">
+                        <!-- Usuários ativos serão carregados dinamicamente -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Gráfico de Consumo -->
+            <section class="consumption-chart">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Consumo de Café - Últimos 7 Dias</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="consumptionChart" width="400" height="200"></canvas>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal de Confirmação -->
+    <div id="confirmModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="confirmTitle">Confirmar Ação</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="confirmMessage">Tem certeza que deseja executar esta ação?</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                <button class="btn btn-danger" id="confirmBtn" onclick="confirmAction()">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <div class="loading-text">Processando...</div>
+    </div>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/admin.js"></script>
+    
+    <script>
+        // Inicialização da página
+        document.addEventListener('DOMContentLoaded', function() {
+            initAdminDashboard();
+        });
+
+        let autoRefresh = true;
+        let refreshInterval;
+        let pendingAction = null;
+
+        function initAdminDashboard() {
+            // Verificar autenticação
+            checkAuth();
+            
+            // Carregar dados iniciais
+            loadDashboardData();
+            
+            // Iniciar auto-refresh
+            startAutoRefresh();
+            
+            // Configurar eventos
+            setupEventListeners();
+        }
+
+        function loadDashboardData() {
+            Promise.all([
+                loadSystemStats(),
+                loadRecentActivity(),
+                loadActiveUsers(),
+                loadConsumptionChart()
+            ]).catch(error => {
+                console.error('Erro ao carregar dados:', error);
+                showAlert('Erro ao carregar dados do dashboard', 'error');
+            });
+        }
+
+        async function loadSystemStats() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                
+                updateStatsGrid(data);
+                updateSystemStatus(data);
+            } catch (error) {
+                console.error('Erro ao carregar estatísticas:', error);
+                showAlert('Erro ao carregar estatísticas', 'error');
+            }
+        }
+
+        function updateStatsGrid(data) {
+            const statsGrid = document.getElementById('statsGrid');
+            statsGrid.innerHTML = `
+                <div class="stat-card">
+                    <span class="stat-number">${data.users?.total || 0}</span>
+                    <span class="stat-label">Usuários Cadastrados</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number">${data.coffee?.totalServed || 0}</span>
+                    <span class="stat-label">Cafés Servidos</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number">${data.coffee?.remaining || 0}</span>
+                    <span class="stat-label">Cafés Restantes</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number">${data.users?.activeToday || 0}</span>
+                    <span class="stat-label">Usuários Ativos Hoje</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number">${data.auth?.activeSessions || 0}</span>
+                    <span class="stat-label">Sessões Ativas</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number">${formatUptime(data.system?.uptime || 0)}</span>
+                    <span class="stat-label">Tempo Ativo</span>
+                </div>
+            `;
+        }
+
+        function updateSystemStatus(data) {
+            // Status do sistema
+            const systemIcon = document.getElementById('systemStatusIcon');
+            const systemText = document.getElementById('systemStatusText');
+            
+            if (data.coffee?.isBusy) {
+                systemIcon.textContent = '🟡';
+                systemText.textContent = 'Ocupado';
+            } else {
+                systemIcon.textContent = '🟢';
+                systemText.textContent = 'Online';
+            }
+            
+            // Status do café
+            const coffeeIcon = document.getElementById('coffeeStatusIcon');
+            const coffeeText = document.getElementById('coffeeStatusText');
+            
+            if (data.coffee?.remaining <= 0) {
+                coffeeIcon.textContent = '🔴';
+                coffeeText.textContent = 'Vazio';
+            } else if (data.coffee?.isBusy) {
+                coffeeIcon.textContent = '🟡';
+                coffeeText.textContent = 'Servindo';
+            } else {
+                coffeeIcon.textContent = '🟢';
+                coffeeText.textContent = 'Pronto';
+            }
+            
+            // Status WiFi
+            const wifiIcon = document.getElementById('wifiStatusIcon');
+            const wifiText = document.getElementById('wifiStatusText');
+            
+            if (data.system?.wifiConnected) {
+                wifiIcon.textContent = '🟢';
+                wifiText.textContent = 'Conectado';
+            } else {
+                wifiIcon.textContent = '🔴';
+                wifiText.textContent = 'Desconectado';
+            }
+        }
+
+        async function loadRecentActivity() {
+            try {
+                const response = await fetch('/api/logs?limit=10');
+                const data = await response.json();
+                
+                const activityList = document.getElementById('activityList');
+                
+                if (data.logs && data.logs.length > 0) {
+                    activityList.innerHTML = data.logs.map(log => `
+                        <div class="activity-item">
+                            <div class="activity-icon">${getActivityIcon(log)}</div>
+                            <div class="activity-content">
+                                <div class="activity-text">${log}</div>
+                                <div class="activity-time">${formatLogTime(log)}</div>
+                            </div

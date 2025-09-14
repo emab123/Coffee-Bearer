@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estatísticas - Cafeteira RFID</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="app-title">
+                <div class="coffee-icon">☕</div>
+                <div>
+                    <h1>Cafeteira RFID - Admin</h1>
+                    <p class="version">Estatísticas do Sistema v4.0</p>
+                </div>
+            </div>
+            <div class="user-info">
+                <div class="user-avatar">A</div>
+                <div>
+                    <div class="user-name">Administrador</div>
+                    <div class="user-role">Admin</div>
+                </div>
+                <button class="logout-btn" onclick="logout()">Sair</button>
+            </div>
+        </header>
+
+        <nav class="app-nav">
+            <ul class="nav-tabs">
+                <li class="nav-tab"><a href="/admin/dashboard">Dashboard</a></li>
+                <li class="nav-tab"><a href="/admin/users">Usuários</a></li>
+                <li class="nav-tab"><a href="/admin/settings">Configurações</a></li>
+                <li class="nav-tab"><a href="/admin/logs">Logs</a></li>
+                <li class="nav-tab active"><a href="/admin/stats">Estatísticas</a></li>
+            </ul>
+        </nav>
+
+        <main class="app-main">
+            <div id="alertContainer"></div>
+
+            <section class="page-controls">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">📊 Controles de Estatísticas</h3>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="refreshStats()">
+                            🔄 Atualizar Dados
+                        </button>
+                        <select id="timeRangeFilter" class="form-select" onchange="refreshStats()">
+                            <option value="7d">Últimos 7 dias</option>
+                            <option value="30d">Últimos 30 dias</option>
+                            <option value="all">Todo o período</option>
+                        </select>
+                    </div>
+                </div>
+            </section>
+
+            <section class="stats-kpis">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-number" id="kpiTotalServed">0</span>
+                        <span class="stat-label">Total de Cafés Servidos</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" id="kpiDailyAverage">0</span>
+                        <span class="stat-label">Média Diária</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" id="kpiPeakDay">N/A</span>
+                        <span class="stat-label">Dia de Pico</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" id="kpiTopUser">N/A</span>
+                        <span class="stat-label">Usuário Mais Ativo</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="charts-section">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Consumo de Café ao Longo do Tempo</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="consumptionChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Distribuição de Status dos Usuários</h3>
+                    </div>
+                    <div class="chart-container" style="max-width: 400px; margin: auto;">
+                        <canvas id="usersChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Horários de Pico de Consumo</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="hourlyChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+             <section class="top-users-section">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Top 5 Usuários (por consumo)</h3>
+                    </div>
+                    <div class="table-container">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Posição</th>
+                                    <th>Nome</th>
+                                    <th>UID</th>
+                                    <th>Cafés Consumidos</th>
+                                </tr>
+                            </thead>
+                            <tbody id="topUsersTableBody">
+                                </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <div class="loading-text">Carregando estatísticas...</div>
+    </div>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/admin.js"></script>
+
+    <script>
+        // Variáveis para as instâncias dos gráficos
+        let consumptionChart, usersChart, hourlyChart;
+
+        // Inicialização da página
+        document.addEventListener('DOMContentLoaded', function() {
+            initStatsPage();
+        });
+
+        function initStatsPage() {
+            checkAuth(); // Verifica se o usuário está logado
+            initCharts(); // Prepara os canvases dos gráficos
+            
+            // Solicita os dados ao backend via WebSocket
+            refreshStats();
+        }
+        
+        function refreshStats() {
+            console.log("Solicitando estatísticas do servidor...");
+            showLoading(true);
+
+            // AQUI: Lógica para solicitar dados via WebSocket
+            // Exemplo:
+            // sendWebSocketMessage('get_stats', { 
+            //     range: document.getElementById('timeRangeFilter').value 
+            // });
+
+            // Para fins de demonstração, usaremos dados falsos
+            // Remova esta parte quando a integração WebSocket estiver pronta
+            setTimeout(() => {
+                const fakeData = generateFakeStats();
+                updateAllStats(fakeData);
+                showLoading(false);
+            }, 1000);
+        }
+
+        // Função para ser chamada quando os dados chegam via WebSocket
+        function handleStatsUpdate(data) {
+            console.log("Estatísticas recebidas:", data);
+            updateAllStats(data);
+            showLoading(false);
+        }
+
+        function updateAllStats(data) {
+            updateKPIs(data.kpis);
+            updateConsumptionChart(data.consumption);
+            updateUsersChart(data.users);
+            updateHourlyChart(data.hourly);
+            updateTopUsersTable(data.topUsers);
+        }
+
+        function updateKPIs(kpis) {
+            document.getElementById('kpiTotalServed').textContent = kpis.totalServed || 0;
+            document.getElementById('kpiDailyAverage').textContent = kpis.dailyAverage || '0.0';
+            document.getElementById('kpiPeakDay').textContent = kpis.peakDay || 'N/A';
+            document.getElementById('kpiTopUser').textContent = kpis.topUser || 'N/A';
+        }
+
+        function initCharts() {
+            // Gráfico de Consumo
+            const ctxConsumption = document.getElementById('consumptionChart').getContext('2d');
+            consumptionChart = new Chart(ctxConsumption, {
+                type: 'line',
+                data: { labels: [], datasets: [{ label: 'Cafés Servidos', data: [], borderColor: 'var(--primary-light)', tension: 0.1 }] },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            // Gráfico de Usuários
+            const ctxUsers = document.getElementById('usersChart').getContext('2d');
+            usersChart = new Chart(ctxUsers, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Ativos', 'Inativos', 'Sem Créditos'],
+                    datasets: [{
+                        data: [],
+                        backgroundColor: ['var(--success-color)', 'var(--text-secondary)', 'var(--warning-color)'],
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            // Gráfico de Horários
+            const ctxHourly = document.getElementById('hourlyChart').getContext('2d');
+            hourlyChart = new Chart(ctxHourly, {
+                type: 'bar',
+                data: { labels: [], datasets: [{ label: 'Média de Cafés', data: [], backgroundColor: 'rgba(52, 152, 219, 0.6)' }] },
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+            });
+        }
+        
+        function updateConsumptionChart(data) {
+            consumptionChart.data.labels = data.labels;
+            consumptionChart.data.datasets[0].data = data.values;
+            consumptionChart.update();
+        }
+
+        function updateUsersChart(data) {
+            usersChart.data.datasets[0].data = data.values;
+            usersChart.update();
+        }
+        
+        function updateHourlyChart(data) {
+            hourlyChart.data.labels = data.labels;
+            hourlyChart.data.datasets[0].data = data.values;
+            hourlyChart.update();
+        }
+        
+        function updateTopUsersTable(users) {
+            const tbody = document.getElementById('topUsersTableBody');
+            if (users && users.length > 0) {
+                tbody.innerHTML = users.map((user, index) => `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td><strong>${escapeHtml(user.name)}</strong></td>
+                        <td><code>${escapeHtml(user.uid)}</code></td>
+                        <td><span class="badge badge-success">${user.count}</span></td>
+                    </tr>
+                `).join('');
+            } else {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center">Nenhum dado de consumo disponível.</td></tr>';
+            }
+        }
+        
+        // --- FUNÇÃO DE DADOS FALSOS (REMOVER EM PRODUÇÃO) ---
+        function generateFakeStats() {
+            return {
+                kpis: {
+                    totalServed: 1243,
+                    dailyAverage: '12.8',
+                    peakDay: 'Sexta-feira',
+                    topUser: 'João Silva'
+                },
+                consumption: {
+                    labels: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'],
+                    values: [15, 22, 18, 25, 30, 12, 8]
+                },
+                users: {
+                    values: [35, 5, 10] // Ativos, Inativos, Sem Créditos
+                },
+                hourly: {
+                    labels: ['08h', '09h', '10h', '11h', '14h', '15h', '16h'],
+                    values: [5, 8, 12, 7, 15, 11, 9]
+                },
+                topUsers: [
+                    { name: 'João Silva', uid: 'A1 B2 C3 D4', count: 128 },
+                    { name: 'Maria Oliveira', uid: 'E5 F6 G7 H8', count: 97 },
+                    { name: 'Carlos Pereira', uid: 'I9 J0 K1 L2', count: 85 },
+                    { name: 'Ana Costa', uid: 'M3 N4 O5 P6', count: 72 },
+                    { name: 'Lucas Souza', uid: 'Q7 R8 S9 T0', count: 61 }
+                ]
+            };
+        }
+    </script>
+</body>
+</html>

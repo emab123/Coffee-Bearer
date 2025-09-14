@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Histórico - Cafeteira RFID</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="app-title">
+                <div class="coffee-icon">☕</div>
+                <div>
+                    <h1>Cafeteira RFID</h1>
+                    <p class="version">Histórico de Consumo v4.0</p>
+                </div>
+            </div>
+            <div class="user-info">
+                <div class="user-avatar">U</div>
+                <div>
+                    <div class="user-name">Usuário</div>
+                    <div class="user-role">Usuário</div>
+                </div>
+                <button class="logout-btn" onclick="logout()">Sair</button>
+            </div>
+        </header>
+
+        <nav class="app-nav">
+            <ul class="nav-tabs">
+                <li class="nav-tab"><a href="/user/dashboard">Meu Painel</a></li>
+                <li class="nav-tab"><a href="/user/profile">Meu Perfil</a></li>
+                <li class="nav-tab active"><a href="/user/history">Histórico</a></li>
+            </ul>
+        </nav>
+
+        <main class="app-main">
+            <div id="alertContainer"></div>
+
+            <section class="history-summary">
+                <h2 class="section-title">Resumo do seu Histórico</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-number" id="summaryTotal">0</span>
+                        <span class="stat-label">Total de Cafés (Período)</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" id="summaryAvg">0.0</span>
+                        <span class="stat-label">Média Diária</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" id="summaryPeakDay">N/A</span>
+                        <span class="stat-label">Dia da Semana Favorito</span>
+                    </div>
+                </div>
+            </section>
+            
+            <section class="history-table-section">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Seu Histórico de Atividades</h3>
+                        <div class="btn-group">
+                           <select id="dateRangeFilter" class="form-select" onchange="refreshHistory()">
+                                <option value="7d">Últimos 7 dias</option>
+                                <option value="30d">Últimos 30 dias</option>
+                                <option value="all">Todo o período</option>
+                            </select>
+                            <button class="btn btn-secondary" onclick="exportHistory()">
+                                💾 Exportar
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Data e Hora</th>
+                                    <th>Evento</th>
+                                    <th>Detalhes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyTableBody">
+                                </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <div class="loading-text">Carregando histórico...</div>
+    </div>
+    
+    <script src="/js/app.js"></script>
+    <script src="/js/user.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if(typeof initUserHistoryPage === 'function') {
+                initUserHistoryPage();
+            } else {
+                console.error("Função initUserHistoryPage não encontrada em /js/user.js");
+                // Fallback para demonstração
+                checkAuth();
+                handleHistoryUpdate(generateFakeHistoryData());
+            }
+        });
+
+        // Esta função será chamada a partir de user.js quando os dados chegarem
+        function handleHistoryUpdate(data) {
+            console.log("Atualizando histórico com dados:", data);
+            
+            // Atualiza os cards de resumo
+            document.getElementById('summaryTotal').textContent = data.summary.total;
+            document.getElementById('summaryAvg').textContent = data.summary.dailyAverage;
+            document.getElementById('summaryPeakDay').textContent = data.summary.peakDay;
+
+            // Atualiza a tabela
+            const tableBody = document.getElementById('historyTableBody');
+            if (data.entries && data.entries.length > 0) {
+                tableBody.innerHTML = data.entries.map(entry => `
+                    <tr>
+                        <td>${new Date(entry.timestamp).toLocaleString('pt-BR')}</td>
+                        <td>
+                            <span class="badge ${entry.type === 'consumption' ? 'badge-primary' : 'badge-info'}">
+                                ${entry.event}
+                            </span>
+                        </td>
+                        <td>${escapeHtml(entry.details)}</td>
+                    </tr>
+                `).join('');
+            } else {
+                tableBody.innerHTML = '<tr><td colspan="3" class="text-center">Nenhuma atividade encontrada no período selecionado.</td></tr>';
+            }
+        }
+
+        function refreshHistory() {
+            const range = document.getElementById('dateRangeFilter').value;
+            console.log(`Solicitando histórico para o período: ${range}`);
+            showLoading(true);
+            
+            // Lógica de envio via WebSocket (a ser implementada em user.js)
+            // sendWebSocketMessage('get_user_history', { range: range });
+
+            // Simulação
+            setTimeout(() => {
+                handleHistoryUpdate(generateFakeHistoryData());
+                showLoading(false);
+            }, 500);
+        }
+
+        function exportHistory() {
+            showAlert('Funcionalidade de exportação em desenvolvimento.', 'info');
+        }
+
+        // --- FUNÇÃO DE DADOS FALSOS (REMOVER EM PRODUÇÃO) ---
+        function generateFakeHistoryData() {
+            return {
+                summary: {
+                    total: 15,
+                    dailyAverage: "2.1",
+                    peakDay: "Quarta-feira"
+                },
+                entries: [
+                    { timestamp: Date.now() - 3 * 3600000, event: 'Café Consumido', details: '1 crédito debitado.', type: 'consumption' },
+                    { timestamp: Date.now() - 25 * 3600000, event: 'Café Consumido', details: '1 crédito debitado.', type: 'consumption' },
+                    { timestamp: Date.now() - 50 * 3600000, event: 'Café Consumido', details: '1 crédito debitado.', type: 'consumption' },
+                    { timestamp: Date.now() - 5 * 86400000, event: 'Créditos Resetados', details: 'Créditos restaurados para 10.', type: 'system' },
+                    { timestamp: Date.now() - 6 * 86400000, event: 'Café Consumido', details: '1 crédito debitado.', type: 'consumption' },
+                    { timestamp: Date.now() - 7 * 86400000, event: 'Café Consumido', details: '1 crédito debitado.', type: 'consumption' },
+                ]
+            };
+        }
+    </script>
+</body>
+</html>
