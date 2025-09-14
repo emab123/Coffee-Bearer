@@ -13,7 +13,7 @@ Leitura e processamento de tags RFID
 #include "config.h"
 #include "user_manager.h"
 #include "coffee_controller.h"
-#include "led_controller.h"
+#include "beeps_and_bleeps.h"
 #include "logger.h"
 
 enum RFIDResult {
@@ -45,7 +45,7 @@ private:
     // Referências para outros managers
     UserManager* userManager;
     CoffeeController* coffeeController;
-    LEDController* ledController;
+    FeedbackManager feedbackManager;
     Logger* logger;
     
     String readUID();

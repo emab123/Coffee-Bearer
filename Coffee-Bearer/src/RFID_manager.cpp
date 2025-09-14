@@ -50,6 +50,7 @@ bool RFIDManager::begin() {
     // Configurar referências para outros managers
     this->userManager = &::userManager;
     this->coffeeController = &::coffeeController;
+
     this->logger = &::logger;
     
     initialized = true;

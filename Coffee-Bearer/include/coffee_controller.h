@@ -9,6 +9,7 @@ Gerencia o preparo e controle de café
 
 #include <Arduino.h>
 #include "config.h"
+#include "beeps_and_bleeps.h"
 
 enum CoffeeStatus {
     COFFEE_READY,
@@ -28,11 +29,7 @@ struct CoffeeStats {
 
 class CoffeeController {
 private:
-    enum ToneState { TONE_IDLE, TONE_PLAYING_1, TONE_PAUSE_1, TONE_PLAYING_2, TONE_PAUSE_2, TONE_PLAYING_3 };
-    ToneState currentToneState;
-    unsigned long toneChangeTime;
-    int currentToneFreq1, currentToneFreq2, currentToneFreq3;
-    int currentToneDuration;
+    FeedbackManager* feedbackManager;
     bool systemBusy;
     int remainingCoffees;
     int totalServed;
@@ -52,7 +49,8 @@ private:
     
 public:
     CoffeeController();
-    
+    void setFeedbackManager(FeedbackManager* feedback);
+
     // Inicialização
     bool begin();
     void clearAllData();

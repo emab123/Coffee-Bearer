@@ -1,24 +1,27 @@
 #include "coffee_controller.h"
+#include "beeps_and_bleeps.h"
 #include <Preferences.h>
 
 CoffeeController::CoffeeController() :
-    systemBusy(false),
-    remainingCoffees(MAX_COFFEES),
-    totalServed(0),
-    totalServeTime(0),
-    lastServed(0),
-    dailyCount(0),
-    dailyResetTime(0),
-    lastSave(0),
-    dataChanged(false) {
+feedbackManager(nullptr),
+systemBusy(false),
+remainingCoffees(MAX_COFFEES),
+totalServed(0),
+totalServeTime(0),
+lastServed(0),
+dailyCount(0),
+dailyResetTime(0),
+lastSave(0),
+dataChanged(false) {
+}
+
+void CoffeeController::setFeedbackManager(FeedbackManager* feedback) {
+    this->feedbackManager = feedback;
 }
 
 bool CoffeeController::begin() {
     // Configurar pinos
     pinMode(RELAY_PIN, OUTPUT);
-    pinMode(BUZZER_PIN, OUTPUT);
-    
-    // Garantir que o relé esteja desligado
     digitalWrite(RELAY_PIN, LOW);
     
     // Carregar dados salvos
@@ -26,9 +29,8 @@ bool CoffeeController::begin() {
     
     // Verificar reset diário se necessário
     checkDailyReset();
-    
-    // Som de inicialização
-    playSuccessTone();
+
+    if (feedbackManager) feedbackManager->signalSuccess();
     
     DEBUG_PRINTLN("Coffee Controller inicializado");
     DEBUG_PRINTF("Cafés restantes: %d/%d\n", remainingCoffees, MAX_COFFEES);
@@ -57,41 +59,29 @@ void CoffeeController::clearAllData() {
 }
 
 bool CoffeeController::serveCoffee(const String& userName, int* userCredits) {
-    // Verificar se o sistema está ocupado
     if (systemBusy) {
-        DEBUG_PRINTLN("Sistema ocupado - café não pode ser servido");
-        playErrorTone();
+        if (feedbackManager) feedbackManager->signalError();
         return false;
     }
-    
-    // Verificar se há café disponível
     if (remainingCoffees <= 0) {
-        DEBUG_PRINTLN("Não há café disponível");
-        playErrorTone();
+        if (feedbackManager) feedbackManager->signalError();
+        return false;
+    }
+    if (userCredits != nullptr && *userCredits <= 0) {
+        if (feedbackManager) feedbackManager->signalError();
         return false;
     }
     
-    // Descontar crédito do usuário se fornecido
     if (userCredits != nullptr) {
-        if (*userCredits <= 0) {
-            DEBUG_PRINTLN("Usuário sem créditos suficientes");
-            playErrorTone();
-            return false;
-        }
         (*userCredits)--;
     }
     
-    DEBUG_PRINTF("Servindo café para: %s\n", userName.c_str());
-    
     systemBusy = true;
-    playServingTone();
+    if (feedbackManager) feedbackManager->signalServing(); // ✅ DELEGATE serving sound
 
-    // ✅ REPLACEMENT for delay()
     digitalWrite(RELAY_PIN, HIGH);
-    coffeeServeEndTime = millis() + COFFEE_SERVE_TIME_MS; // Set the end time
-    DEBUG_PRINTLN("Relé ativado - preparando café...");
+    coffeeServeEndTime = millis() + COFFEE_SERVE_TIME_MS;
     
-    // The function now returns immediately without blocking
     return true;
 }
 
@@ -101,8 +91,7 @@ void CoffeeController::refillContainer() {
     remainingCoffees = MAX_COFFEES;
     dataChanged = true;
     
-    // Som de reabastecimento
-    playRefillTone();
+    if (feedbackManager) feedbackManager->signalRefill();
     
     DEBUG_PRINTF("Recipiente reabastecido! Cafés disponíveis: %d\n", remainingCoffees);
 }
@@ -110,14 +99,11 @@ void CoffeeController::refillContainer() {
 void CoffeeController::emergencyStop() {
     DEBUG_PRINTLN("PARADA DE EMERGÊNCIA ATIVADA!");
     
-    // Desativar relé imediatamente
     digitalWrite(RELAY_PIN, LOW);
     
-    // Marcar sistema como não ocupado
     systemBusy = false;
     
-    // Som de erro
-    playErrorTone();
+    if (feedbackManager) feedbackManager->signalError();
     
     DEBUG_PRINTLN("Sistema de café parado com segurança");
 }
@@ -230,7 +216,7 @@ void CoffeeController::maintenance() {
         lastServed = millis();
         dataChanged = true;
 
-        playSuccessTone();
+         if (feedbackManager) feedbackManager->signalSuccess();
         systemBusy = false; // System is now free
 
         DEBUG_PRINTF("Café servido com sucesso! Restam: %d\n", remainingCoffees);
@@ -288,42 +274,6 @@ void CoffeeController::loadFromPreferences() {
     if (dailyCount < 0) dailyCount = 0;
     
     DEBUG_PRINTLN("Dados da cafeteira carregados");
-}
-
-void CoffeeController::playSuccessTone() {
-    // Dois tons ascendentes para indicar sucesso
-    tone(BUZZER_PIN, TONE_SUCCESS_FREQ1, TONE_SUCCESS_DURATION);
-    delay(TONE_SUCCESS_DURATION + 20);
-    tone(BUZZER_PIN, TONE_SUCCESS_FREQ2, TONE_SUCCESS_DURATION);
-    delay(TONE_SUCCESS_DURATION + 20);
-    noTone(BUZZER_PIN);
-}
-
-void CoffeeController::playErrorTone() {
-    // Tom baixo e longo para indicar erro
-    tone(BUZZER_PIN, TONE_ERROR_FREQ, TONE_ERROR_DURATION);
-    delay(TONE_ERROR_DURATION + 50);
-    noTone(BUZZER_PIN);
-}
-
-void CoffeeController::playServingTone() {
-    // Dois tons rápidos para indicar que está preparando
-    tone(BUZZER_PIN, TONE_COFFEE_FREQ1, TONE_COFFEE_DURATION);
-    delay(TONE_COFFEE_DURATION + 30);
-    tone(BUZZER_PIN, TONE_COFFEE_FREQ2, TONE_COFFEE_DURATION);
-    delay(TONE_COFFEE_DURATION + 30);
-    noTone(BUZZER_PIN);
-}
-
-void CoffeeController::playRefillTone() {
-    // Três tons ascendentes para indicar reabastecimento
-    tone(BUZZER_PIN, TONE_REFILL_FREQ1, TONE_SUCCESS_DURATION);
-    delay(TONE_SUCCESS_DURATION + 20);
-    tone(BUZZER_PIN, TONE_REFILL_FREQ2, TONE_SUCCESS_DURATION);
-    delay(TONE_SUCCESS_DURATION + 20);
-    tone(BUZZER_PIN, TONE_REFILL_FREQ3, TONE_SUCCESS_DURATION);
-    delay(TONE_SUCCESS_DURATION + 20);
-    noTone(BUZZER_PIN);
 }
 
 void CoffeeController::checkDailyReset() {
