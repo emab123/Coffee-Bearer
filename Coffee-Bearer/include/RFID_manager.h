@@ -64,7 +64,7 @@ public:
     // Inicialização
     bool begin();
     void end();
-    void setManagers(UserManager* users, CoffeeController* coffee, LEDController* led, Logger* log);
+    void setManagers(UserManager* users, CoffeeController* coffee, Logger* log);
     
     // Loop principal (deve ser chamado no loop principal)
     void loop();

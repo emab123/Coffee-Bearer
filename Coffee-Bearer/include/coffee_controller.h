@@ -28,6 +28,11 @@ struct CoffeeStats {
 
 class CoffeeController {
 private:
+    enum ToneState { TONE_IDLE, TONE_PLAYING_1, TONE_PAUSE_1, TONE_PLAYING_2, TONE_PAUSE_2, TONE_PLAYING_3 };
+    ToneState currentToneState;
+    unsigned long toneChangeTime;
+    int currentToneFreq1, currentToneFreq2, currentToneFreq3;
+    int currentToneDuration;
     bool systemBusy;
     int remainingCoffees;
     int totalServed;
@@ -41,11 +46,9 @@ private:
     
     void saveToPreferences();
     void loadFromPreferences();
-    void playSuccessTone();
-    void playErrorTone();
-    void playServingTone();
-    void playRefillTone();
     void checkDailyReset();
+    void handleTones();
+    
     
 public:
     CoffeeController();

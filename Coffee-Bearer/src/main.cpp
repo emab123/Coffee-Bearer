@@ -16,7 +16,7 @@ Admin/Usuário, Autenticação e LED Neopixel
 // Inclusão dos módulos customizados
 #include "config.h"
 #include "RFID_manager.h"
-#include "led_controller.h"
+#include "beeps_and_bleeps.h"
 #include "auth_manager.h"
 #include "logger.h"
 #include "user_manager.h"
@@ -36,7 +36,7 @@ AuthManager authManager;
 Logger logger;
 WebServerManager webServer(authManager, logger, userManager, coffeeController);
 RFIDManager rfidManager;
-LEDController ledController;
+FeedbackManager feedbackManager;
 
 // Variáveis de controle
 unsigned long lastResetCheck = 0;
@@ -53,7 +53,7 @@ void connectWiFi() {
     while (WiFi.status() != WL_CONNECTED && attempts < 30) {
         delay(1000);
         Serial.print(".");
-        ledController.update();
+        feedbackManager.signalRefill();
         attempts++;
     }
     
@@ -64,7 +64,7 @@ void connectWiFi() {
     } else {
         Serial.println(F("\nFalha na conexão WiFi!"));
         logger.error("Falha na conexão WiFi");
-        ledController.showStatusEmpty();
+        feedbackManager.showStatusError();
     }
 }
 
@@ -76,17 +76,15 @@ void initializeSystem() {
     Serial.println(F("     SISTEMA CAFETEIRA RFID v4.0 - INICIANDO     "));
     Serial.println(F("=================================================="));
     
-    // Inicializar SPIFFS primeiro
+    feedbackManager.begin();
+
     if (!SPIFFS.begin(true)) {
         Serial.println(F("ERRO FATAL: Falha ao montar SPIFFS"));
         while(1) {
-            ledController.update();
+            feedbackManager.signalError();
             delay(100);
         }
     }
-    
-    // Inicializar componentes
-    ledController.begin();
     
     logger.begin();
     logger.info("Sistema iniciando...");
@@ -107,7 +105,7 @@ void initializeSystem() {
     timeClient.update();
     
     systemInitialized = true;
-    ledController.showStatusOK();
+    feedbackManager.showStatusReady();
     
     logger.info("Sistema iniciado com sucesso");
     Serial.print(F("Sistema pronto! Acesse: http://"));
@@ -117,7 +115,7 @@ void initializeSystem() {
 }
 void performFactoryReset() {
     Serial.println("Executando reset de fábrica...");
-    ledController.signalServing();
+    feedbackManager.showStatusBusy();
     
     // Limpar dados dos usuários
     userManager.clearAllData();
@@ -292,9 +290,9 @@ void checkWeeklyReset() {
         Serial.println("Executando reset semanal de créditos...");
         userManager.performWeeklyReset();
         logger.info("Reset semanal de créditos executado");
-        ledController.signalServing();
+        feedbackManager.signalServing();
         delay(2000);
-        ledController.showStatusOK();
+        feedbackManager.showStatusReady();
     }
 }
 
@@ -302,15 +300,15 @@ void updateSystemStatus() {
     // Esta função define a cor de fundo se NENHUMA animação estiver acontecendo.
     // A prioridade é mostrar se o café está vazio
     if (coffeeController.isEmpty()) {
-        ledController.showStatusEmpty();
+        feedbackManager.showStatusEmpty();
     } 
     // Depois, se está acabando (ex: menos de 5 cafés)
     else if (coffeeController.getRemainingCoffees() < 5) {
-        ledController.showStatusLow();
+        feedbackManager.showStatusLow();
     }
     // Se não, tudo OK
     else {
-        ledController.showStatusOK();
+        feedbackManager.showStatusReady();
     }
 }
 
@@ -320,7 +318,7 @@ void handleWiFiReconnection() {
     if (WiFi.status() != WL_CONNECTED) {
         if (millis() - lastReconnectAttempt > 30000) { // Tenta reconectar a cada 30s
             Serial.println("WiFi desconectado. Tentando reconectar...");
-            ledController.showStatusInitializing();
+            feedbackManager.showStatusInitializing();
             WiFi.reconnect();
             lastReconnectAttempt = millis();
         }
@@ -352,7 +350,7 @@ void loop() {
     // Gerenciar reconexão WiFi
     handleWiFiReconnection();
     
-    ledController.update(); 
+    feedbackManager.update(); 
 
     // Atualizar NTP periodicamente
     static unsigned long lastNTPUpdate = 0;

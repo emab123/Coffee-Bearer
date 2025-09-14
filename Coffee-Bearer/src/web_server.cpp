@@ -5,7 +5,7 @@
 #include "coffee_controller.h"
 #include "system_utils.h"
 #include <SPIFFS.h>
-#include <ArduinoJson.h> // Ensure ArduinoJson is included
+#include <ArduinoJson.h>
 #include <AsyncJson.h>
 
 // Constructor
@@ -26,7 +26,7 @@ void WebServerManager::begin() {
     Serial.println("🌐 Web server started");
 }
 
-/* -------------------- Static Routes (Corrected for Gzip & Paths) -------------------- */
+/* -------------------- Static Routes -------------------- */
 void WebServerManager::setupStaticRoutes() {
     server.serveStatic("/", SPIFFS, "/web/")
         .setDefaultFile("login.html")
@@ -55,8 +55,7 @@ void WebServerManager::setupStaticRoutes() {
         });
 }
 
-
-/* -------------------- Auth Routes (Corrected Redirect) -------------------- */
+/* -------------------- Auth Routes -------------------- */
 void WebServerManager::setupAuthRoutes() {
     server.on("/auth/login", HTTP_POST, [this](AsyncWebServerRequest *req) {
         if (!req->hasParam("username", true) || !req->hasParam("password", true)) {
@@ -103,14 +102,13 @@ void WebServerManager::setupAuthRoutes() {
     });
 }
 
-/* -------------------- API Routes (Corrected) -------------------- */
+/* -------------------- API Routes -------------------- */
 void WebServerManager::setupApiRoutes() {
     server.on("/api/status", HTTP_GET, [this](AsyncWebServerRequest *req) {
         if (!this->authManager.isAuthenticated(req)) {
             req->send(401, "application/json", "{\"error\":\"Unauthorized\"}");
             return;
         }
-
         StaticJsonDocument<1024> doc;
         systemStatusToJson(doc, this->logger, this->coffeeController, this->userManager, this->authManager);
         String json;
@@ -118,6 +116,9 @@ void WebServerManager::setupApiRoutes() {
         req->send(200, "application/json", json);
     });
 
+    // --- User Management Endpoint ---
+    
+    // GET /api/users - List all users
     server.on("/api/users", HTTP_GET, [this](AsyncWebServerRequest *req) {
         if (!this->authManager.isAuthenticated(req, ROLE_ADMIN)) {
             req->send(403, "application/json", "{\"error\":\"Forbidden\"}");
@@ -127,53 +128,39 @@ void WebServerManager::setupApiRoutes() {
         req->send(200, "application/json", json);
     });
 
-    // FIX: Handle JSON body for adding a user
-    AsyncCallbackJsonWebHandler *addUserHandler = new AsyncCallbackJsonWebHandler("/api/users", [this](AsyncWebServerRequest *request, JsonVariant &json) {
+    // This single handler will process POST (add) and DELETE (remove) with a JSON body
+    AsyncCallbackJsonWebHandler* userHandler = new AsyncCallbackJsonWebHandler("/api/users", [this](AsyncWebServerRequest *request, JsonVariant &json) {
         if (!this->authManager.isAuthenticated(request, ROLE_ADMIN)) {
             request->send(403, "application/json", "{\"error\":\"Forbidden\"}");
             return;
         }
-        
+
         JsonObject jsonObj = json.as<JsonObject>();
-        String uid = jsonObj["uid"];
-        String name = jsonObj["name"];
         
-        if (this->userManager.addUser(uid, name)) {
-            request->send(200, "application/json", "{\"success\":true}");
-        } else {
-            request->send(400, "application/json", "{\"success\":false, \"message\":\"Failed to add user\"}");
+        // ADD USER (POST)
+        if (request->method() == HTTP_POST) {
+            String uid = jsonObj["uid"];
+            String name = jsonObj["name"];
+            if (this->userManager.addUser(uid, name)) {
+                request->send(200, "application/json", "{\"success\":true}");
+            } else {
+                request->send(400, "application/json", "{\"success\":false, \"message\":\"Failed to add user\"}");
+            }
+        }
+        // REMOVE USER (DELETE)
+        else if (request->method() == HTTP_DELETE) {
+            String uid = jsonObj["uid"];
+            if (this->userManager.removeUser(uid)) {
+                request->send(200, "application/json", "{\"success\":true}");
+            } else {
+                request->send(400, "application/json", "{\"success\":false, \"message\":\"User not found\"}");
+            }
+        }
+        else {
+            request->send(405, "application/json", "{\"error\":\"Method Not Allowed\"}");
         }
     });
-    server.addHandler(addUserHandler);
-
-
-    // FIX: Handle JSON body for deleting a user
-    AsyncCallbackJsonWebHandler *deleteUserHandler = new AsyncCallbackJsonWebHandler("/api/users", [this](AsyncWebServerRequest *request, JsonVariant &json) {
-        if (request->method() != HTTP_DELETE) return;
-        
-        if (!this->authManager.isAuthenticated(request, ROLE_ADMIN)) {
-            request->send(403, "application/json", "{\"error\":\"Forbidden\"}");
-            return;
-        }
-        
-        JsonObject jsonObj = json.as<JsonObject>();
-        String uid = jsonObj["uid"];
-
-        if (this->userManager.removeUser(uid)) {
-            request->send(200, "application/json", "{\"success\":true}");
-        } else {
-            request->send(400, "application/json", "{\"success\":false, \"message\":\"User not found\"}");
-        }
-    });
-    // Note: The AsyncJSON library doesn't directly support DELETE, so we attach it as a POST and check the method.
-    // A more robust solution would be a custom web handler, but this works.
-    // For simplicity, we can assume the frontend will only send DELETE requests with JSON.
-    // A better way is to create a specific handler for DELETE.
-    server.on("/api/users", HTTP_DELETE, [this](AsyncWebServerRequest* request){
-        // This is a placeholder to handle the OPTIONS preflight from browsers, if needed.
-        // The actual logic is in the JSON handler, which is tricky for DELETE.
-        // A simple workaround for delete is to use a different URL like /api/users/delete
-    });
+    server.addHandler(userHandler);
 
     server.on("/api/serve-coffee", HTTP_POST, [this](AsyncWebServerRequest *req) {
         if (!this->authManager.isAuthenticated(req, ROLE_USER)) {

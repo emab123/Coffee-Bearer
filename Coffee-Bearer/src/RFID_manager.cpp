@@ -1,20 +1,19 @@
 #include "RFID_manager.h"
-#include "credentials.h"
+#include "beeps_and_bleeps.h"
 
 extern UserManager userManager;
 extern CoffeeController coffeeController;
-extern LEDController ledController;
+extern FeedbackManager feedbackManager;
 extern Logger logger;
 
-RFIDManager::RFIDManager() :
-    mfrc522(nullptr),
+RFIDManager::RFIDManager() : 
+    mfrc522(nullptr), 
     lastUID(""),
     lastReadTime(0),
     cooldownEndTime(0),
     initialized(false),
     userManager(nullptr),
     coffeeController(nullptr),
-    ledController(nullptr),
     logger(nullptr) {
 }
 
@@ -51,7 +50,6 @@ bool RFIDManager::begin() {
     // Configurar referências para outros managers
     this->userManager = &::userManager;
     this->coffeeController = &::coffeeController;
-    this->ledController = &::ledController;
     this->logger = &::logger;
     
     initialized = true;
@@ -71,10 +69,9 @@ void RFIDManager::end() {
     DEBUG_PRINTLN("RFID Manager finalizado");
 }
 
-void RFIDManager::setManagers(UserManager* users, CoffeeController* coffee, LEDController* led, Logger* log) {
+void RFIDManager::setManagers(UserManager* users, CoffeeController* coffee, Logger* log) {
     this->userManager = users;
     this->coffeeController = coffee;
-    this->ledController = led;
     this->logger = log;
 }
 
@@ -330,12 +327,24 @@ void RFIDManager::processMasterKey() {
 }
 
 void RFIDManager::handleRFIDResult(const String& uid, const String& userName, RFIDResult result) {
-    // Feedback visual
-    showResultLED(result);
-    
-    // Feedback sonoro
-    playResultSound(result);
-    
+    switch (result) {
+        case RFID_SUCCESS:
+            // The serving signal is handled by the CoffeeController
+            break;
+        case RFID_MASTER_KEY:
+            feedbackManager.signalMasterKey();
+            break;
+        case RFID_ACCESS_DENIED:
+            feedbackManager.signalUnknownUser();
+            break;
+        case RFID_NO_CREDITS:
+            feedbackManager.signalNoCredits();
+            break;
+        default:
+            feedbackManager.signalError();
+            break;
+    }
+
     // Log detalhado do resultado
     String resultText = "";
     int creditsRemaining = -1;
@@ -393,66 +402,5 @@ void RFIDManager::handleRFIDResult(const String& uid, const String& userName, RF
             details += ", Créditos restantes: " + String(creditsRemaining);
         }
         logger->logSystemEvent("Evento RFID", details);
-    }
-}
-
-void RFIDManager::playResultSound(RFIDResult result) {
-    // Usar os tons definidos em config.h
-    switch (result) {
-        case RFID_SUCCESS:
-            // Tom de sucesso (definido no CoffeeController)
-            tone(BUZZER_PIN, TONE_SUCCESS_FREQ1, TONE_SUCCESS_DURATION);
-            delay(TONE_SUCCESS_DURATION + 20);
-            tone(BUZZER_PIN, TONE_SUCCESS_FREQ2, TONE_SUCCESS_DURATION);
-            delay(TONE_SUCCESS_DURATION + 20);
-            noTone(BUZZER_PIN);
-            break;
-            
-        case RFID_MASTER_KEY:
-            // Sequência especial para chave mestra
-            tone(BUZZER_PIN, TONE_REFILL_FREQ1, 100);
-            delay(120);
-            tone(BUZZER_PIN, TONE_REFILL_FREQ2, 100);
-            delay(120);
-            tone(BUZZER_PIN, TONE_REFILL_FREQ3, 100);
-            delay(120);
-            noTone(BUZZER_PIN);
-            break;
-            
-        case RFID_ACCESS_DENIED:
-        case RFID_NO_CREDITS:
-        case RFID_SYSTEM_BUSY:
-        case RFID_NO_COFFEE:
-        case RFID_ERROR:
-        default:
-            // Tom de erro
-            tone(BUZZER_PIN, TONE_ERROR_FREQ, TONE_ERROR_DURATION);
-            delay(TONE_ERROR_DURATION + 50);
-            noTone(BUZZER_PIN);
-            break;
-    }
-}
-
-void RFIDManager::showResultLED(RFIDResult result) {
-    if (!ledController) {
-        return;
-    }
-    
-    switch (result) {
-        case RFID_SUCCESS:
-            ledController->signalServing();
-            break;
-        case RFID_MASTER_KEY:
-            ledController->signalMasterKey();
-            break;
-        case RFID_ACCESS_DENIED:
-            ledController->signalUnknownUser();
-            break;
-        case RFID_NO_CREDITS:
-            ledController->signalNoCredits();
-            break;
-        default:
-            ledController->signalError();
-            break;
     }
 }
