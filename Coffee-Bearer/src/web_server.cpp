@@ -1,12 +1,9 @@
 #include "web_server.h"
-#include "auth_manager.h"
-#include "logger.h"
-#include "user_manager.h"
-#include "coffee_controller.h"
-#include "system_utils.h"
+#include <WiFi.h>
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
 #include <AsyncJson.h>
+#include "system_utils.h"
 
 // Constructor
 WebServerManager::WebServerManager(AuthManager &auth, Logger &log, UserManager &users, CoffeeController &coffee)
@@ -26,34 +23,71 @@ void WebServerManager::begin() {
     Serial.println("🌐 Web server started");
 }
 
+
+// Helper: serve /web/<base>/<page>.html or .html.gz and add gzip header if needed
+void WebServerManager::sendHtmlFile(AsyncWebServerRequest *req, const String &baseDir, const String &page) {
+    String cleanPage = page;
+    // sanitize: remove trailing slashes
+    if (cleanPage.endsWith("/")) cleanPage.remove(cleanPage.length()-1);
+
+    String file = String("/web/") + baseDir + "/" + cleanPage + ".html";
+    String gz = file + ".gz";
+
+    bool gzExists = SPIFFS.exists(gz);
+    bool plainExists = SPIFFS.exists(file);
+    String toServe = gzExists ? gz : (plainExists ? file : String());
+
+    Serial.printf("➡ Request %s -> try %s (gz=%d plain=%d)\n", req->url().c_str(), toServe.c_str(), gzExists, plainExists);
+
+    if (toServe.length() == 0) {
+        req->send(404, "text/plain", "Page not found");
+        return;
+    }
+
+    // content type from extension (only html here, but keep flexible)
+    const char *contentType = "text/html";
+    AsyncWebServerResponse *response = req->beginResponse(SPIFFS, toServe, contentType);
+    if (gzExists) response->addHeader("Content-Encoding", "gzip");
+    // optional: disable aggressive caching for HTML pages during dev
+    response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    req->send(response);
+}
+
 /* -------------------- Static Routes -------------------- */
 void WebServerManager::setupStaticRoutes() {
+    // --- Pretty root redirects (optional): /admin -> dashboard, /user -> dashboard
+    server.on("/admin", HTTP_GET, [this](AsyncWebServerRequest *req) {
+        this->sendHtmlFile(req, "admin", "dashboard");
+    });
+    server.on("/user", HTTP_GET, [this](AsyncWebServerRequest *req) {
+        this->sendHtmlFile(req, "user", "dashboard");
+    });
+
+    // --- Pretty single-segment pages: /admin/<page> and /user/<page>
+    // Note: the regex handlers must be registered BEFORE serveStatic so they take priority.
+    server.on("^/admin/([A-Za-z0-9_-]+)/*$", HTTP_GET, [this](AsyncWebServerRequest *req) {
+        String page = req->pathArg(0);
+        this->sendHtmlFile(req, "admin", page);
+    });
+
+    server.on("^/user/([A-Za-z0-9_-]+)/*$", HTTP_GET, [this](AsyncWebServerRequest *req) {
+        String page = req->pathArg(0);
+        this->sendHtmlFile(req, "user", page);
+    });
+
+    // --- Static assets and fallback (registered last)
+    // serveStatic will serve files under /web (and will automatically serve .gz if present)
     server.serveStatic("/", SPIFFS, "/web/")
         .setDefaultFile("login.html")
-        .setCacheControl("max-age=600")
-        .setFilter([](AsyncWebServerRequest *request) {
-            String path = request->url();
-            if (path.endsWith("/")) {
-                path += "login.html";
-            } else if (!path.endsWith(".html") && !path.endsWith(".css") && !path.endsWith(".js") && !path.endsWith(".ico") && !path.endsWith(".png")) {
-                path += ".html";
-            }
+        .setCacheControl("max-age=600");
 
-            String gzipped_path = path + ".gz";
-            if (SPIFFS.exists(gzipped_path)) {
-                String contentType = "text/plain";
-                if (path.endsWith(".html")) contentType = "text/html";
-                else if (path.endsWith(".css")) contentType = "text/css";
-                else if (path.endsWith(".js")) contentType = "text/javascript";
-                
-                AsyncWebServerResponse *response = request->beginResponse(SPIFFS, gzipped_path, contentType);
-                response->addHeader("Content-Encoding", "gzip");
-                request->send(response);
-                return false; 
-            }
-            return true;
-        });
+    // helpful NotFound logger to catch any remaining mismatches
+    server.onNotFound([](AsyncWebServerRequest *req) {
+        Serial.printf("❗ 404 %s  (host=%s)\n", req->url().c_str(), req->client()->remoteIP().toString().c_str());
+        req->send(404, "text/plain", "Not found");
+    });
 }
+
 
 /* -------------------- Auth Routes -------------------- */
 void WebServerManager::setupAuthRoutes() {
@@ -70,7 +104,8 @@ void WebServerManager::setupAuthRoutes() {
         String sessionId = this->authManager.login(username, password, ip);
         if (sessionId.length() > 0) {
             UserRole role = this->authManager.getSessionRole(sessionId);
-            String redirectUrl = (role == ROLE_ADMIN) ? "/admin/dashboard.html" : "/user/dashboard.html";
+            // FIX: redirect to /admin/dashboard (not .html)
+            String redirectUrl = (role == ROLE_ADMIN) ? "/admin/dashboard" : "/user/dashboard";
             
             AsyncWebServerResponse *res = req->beginResponse(200, "application/json",
                 "{\"success\":true,\"redirectUrl\":\"" + redirectUrl + "\"}");
@@ -192,6 +227,11 @@ void WebServerManager::setupWebSocket() {
             this->pushStatus();
         } else if (type == WS_EVT_DISCONNECT) {
             Serial.printf("❌ WS client %u disconnected\n", client->id());
+        } else if (type == WS_EVT_DATA) {
+            data[len] = 0;
+            String msg = (char*)data;
+            Serial.printf("📩 WS received: %s\n", msg.c_str());
+            // TODO: parse actions like get_stats if needed
         }
     });
 

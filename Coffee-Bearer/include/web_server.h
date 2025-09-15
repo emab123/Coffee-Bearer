@@ -29,8 +29,9 @@ private:
     Logger &logger;
     UserManager &userManager;
     CoffeeController &coffeeController;
-
+    
     void setupStaticRoutes();
+    void sendHtmlFile(AsyncWebServerRequest* req, const String& baseDir, const String& page);
     void setupAuthRoutes();
     void setupApiRoutes();
     void setupWebSocket();
