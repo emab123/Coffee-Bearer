@@ -15,6 +15,7 @@ Leitura e processamento de tags RFID
 #include "coffee_controller.h"
 #include "beeps_and_bleeps.h"
 #include "logger.h"
+#include "web_server.h"
 
 enum RFIDResult {
     RFID_SUCCESS,
@@ -24,6 +25,11 @@ enum RFIDResult {
     RFID_NO_COFFEE,
     RFID_MASTER_KEY,
     RFID_ERROR
+};
+
+enum ScanMode {
+    SCAN_NORMAL,
+    SCAN_FOR_ADD
 };
 
 struct RFIDEvent {
@@ -47,6 +53,7 @@ private:
     CoffeeController* coffeeController;
     FeedbackManager feedbackManager;
     Logger* logger;
+    ScanMode currentMode;
     
     String readUID();
     bool isInCooldown();
@@ -83,6 +90,7 @@ public:
     bool testRFID();
     String formatUID(const String& uid);
     bool isValidUID(const String& uid);
+    void setScanMode(ScanMode mode);
     
     // Debug
     void printRFIDInfo();

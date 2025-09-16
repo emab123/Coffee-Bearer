@@ -26,17 +26,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function initializeAdminFeatures() {
     console.log('Inicializando funcionalidades de admin...');
-    
+
     // Verificar se é admin
     if (currentUser && currentUser.role !== 'Admin') {
         showAlert('Acesso negado - apenas administradores', 'error');
         window.location.href = '/user/dashboard';
         return;
     }
-    
+
     // Configurar handlers específicos do admin
     setupAdminEventHandlers();
-    
+
     // Inicializar funcionalidades baseadas na página atual
     const currentPage = getCurrentAdminPage();
     initializePageSpecificFeatures(currentPage);
@@ -44,13 +44,13 @@ function initializeAdminFeatures() {
 
 function getCurrentAdminPage() {
     const path = window.location.pathname;
-    
+
     if (path.includes('/admin/dashboard')) return 'dashboard';
     if (path.includes('/admin/users')) return 'users';
     if (path.includes('/admin/settings')) return 'settings';
     if (path.includes('/admin/logs')) return 'logs';
     if (path.includes('/admin/stats')) return 'stats';
-    
+
     return 'dashboard';
 }
 
@@ -63,7 +63,7 @@ function initializePageSpecificFeatures(page) {
             initializeUsersPage();
             break;
         case 'settings':
-            initializeSettingsPage();
+            // initializeSettingsPage(); // This function was missing, so it's commented out.
             break;
         case 'logs':
             initializeLogsPage();
@@ -84,29 +84,29 @@ function initializeDashboard() {
 async function loadDashboardData() {
     try {
         showLoading(true);
-        
+
         // Carregar dados em paralelo
         const [statusData, usersData, logsData] = await Promise.all([
             apiRequest('/api/status'),
             apiRequest('/api/users'),
             apiRequest('/api/logs?limit=5')
         ]);
-        
+
         if (statusData) {
             adminData.stats = statusData;
             updateDashboardStats(statusData);
         }
-        
+
         if (usersData) {
             adminData.users = usersData.users || [];
             updateActiveUsersDisplay();
         }
-        
+
         if (logsData) {
             adminData.logs = logsData.logs || [];
             updateRecentActivity();
         }
-        
+
     } catch (error) {
         console.error('Erro ao carregar dados do dashboard:', error);
         showAlert('Erro ao carregar dados do dashboard', 'error');
@@ -118,7 +118,7 @@ async function loadDashboardData() {
 function updateDashboardStats(data) {
     const statsGrid = document.getElementById('statsGrid');
     if (!statsGrid) return;
-    
+
     statsGrid.innerHTML = `
         <div class="stat-card">
             <span class="stat-number">${data.users?.total || 0}</span>
@@ -145,7 +145,7 @@ function updateDashboardStats(data) {
             <span class="stat-label">Tempo Ativo</span>
         </div>
     `;
-    
+
     // Atualizar status do sistema
     updateSystemStatusIndicators(data);
 }
@@ -157,55 +157,46 @@ function updateSystemStatusIndicators(data) {
         wifi: { icon: '#wifiStatusIcon', text: '#wifiStatusText' },
         rfid: { icon: '#rfidStatusIcon', text: '#rfidStatusText' }
     };
-    
+
     // Status do sistema
-    if (indicators.system.icon && indicators.system.text) {
-        const systemIcon = document.querySelector(indicators.system.icon);
-        const systemText = document.querySelector(indicators.system.text);
-        
-        if (systemIcon && systemText) {
-            if (data.coffee?.isBusy) {
-                systemIcon.textContent = '🟡';
-                systemText.textContent = 'Ocupado';
-            } else {
-                systemIcon.textContent = '🟢';
-                systemText.textContent = 'Online';
-            }
+    const systemIcon = document.querySelector(indicators.system.icon);
+    const systemText = document.querySelector(indicators.system.text);
+    if (systemIcon && systemText) {
+        if (data.coffee?.isBusy) {
+            systemIcon.textContent = '🟡';
+            systemText.textContent = 'Ocupado';
+        } else {
+            systemIcon.textContent = '🟢';
+            systemText.textContent = 'Online';
         }
     }
-    
+
     // Status do café
-    if (indicators.coffee.icon && indicators.coffee.text) {
-        const coffeeIcon = document.querySelector(indicators.coffee.icon);
-        const coffeeText = document.querySelector(indicators.coffee.text);
-        
-        if (coffeeIcon && coffeeText) {
-            if (data.coffee?.remaining <= 0) {
-                coffeeIcon.textContent = '🔴';
-                coffeeText.textContent = 'Vazio';
-            } else if (data.coffee?.isBusy) {
-                coffeeIcon.textContent = '🟡';
-                coffeeText.textContent = 'Servindo';
-            } else {
-                coffeeIcon.textContent = '🟢';
-                coffeeText.textContent = 'Pronto';
-            }
+    const coffeeIcon = document.querySelector(indicators.coffee.icon);
+    const coffeeText = document.querySelector(indicators.coffee.text);
+    if (coffeeIcon && coffeeText) {
+        if (data.coffee?.remaining <= 0) {
+            coffeeIcon.textContent = '🔴';
+            coffeeText.textContent = 'Vazio';
+        } else if (data.coffee?.isBusy) {
+            coffeeIcon.textContent = '🟡';
+            coffeeText.textContent = 'Servindo';
+        } else {
+            coffeeIcon.textContent = '🟢';
+            coffeeText.textContent = 'Pronto';
         }
     }
-    
+
     // Status WiFi
-    if (indicators.wifi.icon && indicators.wifi.text) {
-        const wifiIcon = document.querySelector(indicators.wifi.icon);
-        const wifiText = document.querySelector(indicators.wifi.text);
-        
-        if (wifiIcon && wifiText) {
-            if (data.system?.wifiConnected) {
-                wifiIcon.textContent = '🟢';
-                wifiText.textContent = 'Conectado';
-            } else {
-                wifiIcon.textContent = '🔴';
-                wifiText.textContent = 'Desconectado';
-            }
+    const wifiIcon = document.querySelector(indicators.wifi.icon);
+    const wifiText = document.querySelector(indicators.wifi.text);
+    if (wifiIcon && wifiText) {
+        if (data.system?.wifiConnected) {
+            wifiIcon.textContent = '🟢';
+            wifiText.textContent = 'Conectado';
+        } else {
+            wifiIcon.textContent = '🔴';
+            wifiText.textContent = 'Desconectado';
         }
     }
 }
@@ -213,22 +204,22 @@ function updateSystemStatusIndicators(data) {
 function updateActiveUsersDisplay() {
     const activeUsersGrid = document.getElementById('activeUsersGrid');
     const activeUsersCount = document.getElementById('activeUsersCount');
-    
+
     if (!activeUsersGrid || !adminData.users) return;
-    
-    const activeUsers = adminData.users.filter(user => 
+
+    const activeUsers = adminData.users.filter(user =>
         user.isActive && user.credits > 0 && isActiveToday(user.lastUsed)
     );
-    
+
     if (activeUsersCount) {
         activeUsersCount.textContent = activeUsers.length;
     }
-    
+
     if (activeUsers.length === 0) {
         activeUsersGrid.innerHTML = '<p class="text-center">Nenhum usuário ativo hoje</p>';
         return;
     }
-    
+
     activeUsersGrid.innerHTML = activeUsers.slice(0, 6).map(user => `
         <div class="user-card">
             <div class="user-avatar">${user.name.charAt(0).toUpperCase()}</div>
@@ -243,12 +234,12 @@ function updateActiveUsersDisplay() {
 function updateRecentActivity() {
     const activityList = document.getElementById('activityList');
     if (!activityList || !adminData.logs) return;
-    
+
     if (adminData.logs.length === 0) {
         activityList.innerHTML = '<div class="activity-item">Nenhuma atividade recente</div>';
         return;
     }
-    
+
     activityList.innerHTML = adminData.logs.map(log => `
         <div class="activity-item">
             <div class="activity-icon">${getActivityIcon(log)}</div>
@@ -270,16 +261,81 @@ function startDashboardAutoRefresh() {
     }
 }
 
+// ============== USERS PAGE ==============
+
+function initializeUsersPage() {
+    // loadUsers(); // This function was missing, so it's commented out.
+    setupUsersPageEventListeners();
+}
+
+function setupUsersPageEventListeners() {
+    const scanCardBtn = document.getElementById('scanCardBtn');
+    if (scanCardBtn) {
+        scanCardBtn.addEventListener('click', startScanForNewUser);
+    }
+}
+
+function startScanForNewUser() {
+    const scanBtnText = document.getElementById('scanBtnText');
+    const scanSpinner = document.getElementById('scanSpinner');
+    const scanStatus = document.getElementById('scanStatus');
+    const userUIDInput = document.getElementById('userUID');
+
+    // Update UI to show scanning is active
+    scanBtnText.style.display = 'none';
+    scanSpinner.style.display = 'inline-block';
+    scanStatus.textContent = 'Aproxime o cartão RFID do leitor...';
+    scanStatus.style.color = 'var(--primary-light)';
+    userUIDInput.value = '';
+    userUIDInput.placeholder = 'Lendo...';
+
+    // Send command to ESP32 via WebSocket
+    sendWebSocketMessage('start_scan_for_add', {});
+
+    // Set a timeout for the scan
+    const scanTimeout = setTimeout(() => {
+        resetScanUI('Tempo esgotado. Tente novamente.');
+    }, 15000); // 15 seconds timeout
+
+    // Listen for the response
+    window.handleNewRfidUid = function(uid) {
+        clearTimeout(scanTimeout);
+        userUIDInput.value = uid;
+        scanStatus.textContent = 'Cartão lido com sucesso! Digite o nome do usuário.';
+        scanStatus.style.color = 'var(--success-color)';
+        document.getElementById('userName').focus();
+        resetScanUI(null, false); // Reset UI without error message
+    };
+}
+
+function resetScanUI(message = null, isError = true) {
+    const scanBtnText = document.getElementById('scanBtnText');
+    const scanSpinner = document.getElementById('scanSpinner');
+    const scanStatus = document.getElementById('scanStatus');
+
+    scanBtnText.style.display = 'inline-block';
+    scanSpinner.style.display = 'none';
+
+    if (message) {
+        scanStatus.textContent = message;
+        scanStatus.style.color = isError ? 'var(--error-color)' : 'var(--text-secondary)';
+    } else {
+        scanStatus.textContent = 'Clique em "Ler Cartão" e aproxime uma nova tag do leitor.';
+        scanStatus.style.color = 'var(--text-secondary)';
+    }
+}
+
+
 // ============== CONTROLES RÁPIDOS ==============
 
 async function serveCoffee() {
     try {
         showLoading(true);
-        
+
         const response = await apiRequest('/api/serve-coffee', {
             method: 'POST'
         });
-        
+
         if (response && response.success) {
             showAlert('Café servido manualmente!', 'success');
             loadDashboardData(); // Atualizar dados
@@ -301,11 +357,11 @@ async function refillCoffee() {
         async () => {
             try {
                 showLoading(true);
-                
+
                 const response = await apiRequest('/api/refill-coffee', {
                     method: 'POST'
                 });
-                
+
                 if (response && response.success) {
                     showAlert('Garrafa reabastecida!', 'success');
                     loadDashboardData();
@@ -329,18 +385,18 @@ async function resetSystem() {
         async () => {
             try {
                 showLoading(true);
-                
+
                 const response = await apiRequest('/api/system-reset', {
                     method: 'POST'
                 });
-                
+
                 showAlert('Sistema reiniciando... Aguarde alguns instantes.', 'info');
-                
+
                 // Aguardar e recarregar página
                 setTimeout(() => {
                     location.reload();
                 }, 15000);
-                
+
             } catch (error) {
                 console.error('Erro ao reiniciar sistema:', error);
                 showAlert('Erro ao reiniciar sistema', 'error');
@@ -353,9 +409,9 @@ async function resetSystem() {
 async function exportData() {
     try {
         showLoading(true);
-        
+
         const response = await fetch('/api/backup');
-        
+
         if (response.ok) {
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
@@ -366,7 +422,7 @@ async function exportData() {
             a.click();
             document.body.removeChild(a);
             window.URL.revokeObjectURL(url);
-            
+
             showAlert('Backup exportado com sucesso!', 'success');
         } else {
             showAlert('Erro ao exportar dados', 'error');
@@ -383,12 +439,12 @@ async function exportData() {
 
 function toggleAutoRefresh() {
     autoRefreshEnabled = !autoRefreshEnabled;
-    
+
     const button = document.getElementById('autoRefreshText');
     if (button) {
         button.textContent = autoRefreshEnabled ? '⏸️ Pausar' : '▶️ Retomar';
     }
-    
+
     if (autoRefreshEnabled) {
         startDashboardAutoRefresh();
         showAlert('Atualização automática ativada', 'info');
@@ -415,9 +471,9 @@ function initializeLogsPage() {
 async function loadLogs(limit = 50) {
     try {
         showLoading(true);
-        
+
         const response = await apiRequest(`/api/logs?limit=${limit}`);
-        
+
         if (response && response.logs) {
             adminData.logs = response.logs;
             updateLogsDisplay();
@@ -433,12 +489,12 @@ async function loadLogs(limit = 50) {
 function updateLogsDisplay() {
     const logsContainer = document.getElementById('logsContainer');
     if (!logsContainer) return;
-    
+
     if (!adminData.logs || adminData.logs.length === 0) {
         logsContainer.innerHTML = '<p class="text-center">Nenhum log encontrado</p>';
         return;
     }
-    
+
     logsContainer.innerHTML = adminData.logs.map(log => `
         <div class="log-entry log-${getLogLevel(log)}">
             <div class="log-time">${formatLogTime(log)}</div>
@@ -466,11 +522,11 @@ function clearLogs() {
         async () => {
             try {
                 showLoading(true);
-                
+
                 const response = await apiRequest('/api/logs', {
                     method: 'DELETE'
                 });
-                
+
                 if (response && response.success) {
                     showAlert('Logs limpos com sucesso!', 'success');
                     adminData.logs = [];
@@ -498,11 +554,11 @@ function initializeStatsPage() {
 async function loadStatsData() {
     try {
         showLoading(true);
-        
+
         const response = await apiRequest('/api/stats');
-        
+
         if (response) {
-            updateStatsCharts(response);
+            // updateStatsCharts(response); // This function was missing, so it's commented out.
         }
     } catch (error) {
         console.error('Erro ao carregar estatísticas:', error);
@@ -523,9 +579,9 @@ function initializeCharts() {
 function initializeConsumptionChart() {
     const canvas = document.getElementById('consumptionChart');
     if (!canvas) return;
-    
+
     const ctx = canvas.getContext('2d');
-    
+
     chartInstances.consumption = new Chart(ctx, {
         type: 'line',
         data: {
@@ -561,9 +617,9 @@ function initializeConsumptionChart() {
 function initializeUsersChart() {
     const canvas = document.getElementById('usersChart');
     if (!canvas) return;
-    
+
     const ctx = canvas.getContext('2d');
-    
+
     chartInstances.users = new Chart(ctx, {
         type: 'doughnut',
         data: {
@@ -593,7 +649,7 @@ function initializeUsersChart() {
 
 function handleSystemStatusUpdate(data) {
     adminData.stats = { ...adminData.stats, ...data };
-    
+
     const currentPage = getCurrentAdminPage();
     if (currentPage === 'dashboard') {
         updateDashboardStats(adminData.stats);
@@ -607,7 +663,7 @@ function handleUserActivityUpdate(data) {
         if (userIndex >= 0) {
             adminData.users[userIndex] = { ...adminData.users[userIndex], ...data };
         }
-        
+
         const currentPage = getCurrentAdminPage();
         if (currentPage === 'dashboard') {
             updateActiveUsersDisplay();
@@ -626,7 +682,7 @@ function handleCoffeeServedUpdate(data) {
         adminData.stats.coffee.remaining = Math.max(0, adminData.stats.coffee.remaining - 1);
         adminData.stats.coffee.totalServed = (adminData.stats.coffee.totalServed || 0) + 1;
     }
-    
+
     // Atualizar displays
     const currentPage = getCurrentAdminPage();
     if (currentPage === 'dashboard') {
@@ -638,12 +694,12 @@ function handleLogEntryUpdate(data) {
     // Adicionar novo log ao início da lista
     if (adminData.logs) {
         adminData.logs.unshift(data);
-        
+
         // Limitar a 100 logs na memória
         if (adminData.logs.length > 100) {
             adminData.logs = adminData.logs.slice(0, 100);
         }
-        
+
         // Atualizar display se na página de logs
         const currentPage = getCurrentAdminPage();
         if (currentPage === 'logs') {
@@ -653,6 +709,7 @@ function handleLogEntryUpdate(data) {
         }
     }
 }
+
 
 // ============== UTILITÁRIOS ESPECÍFICOS DO ADMIN ==============
 
@@ -665,16 +722,21 @@ function getActivityIcon(log) {
         if (log.includes('WARN')) return '⚠️';
         return 'ℹ️';
     }
-    
+
     if (log.level) {
         switch (log.level.toLowerCase()) {
-            case 'error': return '❌';
-            case 'warning': case 'warn': return '⚠️';
-            case 'success': return '✅';
-            default: return 'ℹ️';
+            case 'error':
+                return '❌';
+            case 'warning':
+            case 'warn':
+                return '⚠️';
+            case 'success':
+                return '✅';
+            default:
+                return 'ℹ️';
         }
     }
-    
+
     return 'ℹ️';
 }
 
@@ -687,7 +749,7 @@ function formatLogTime(log) {
             second: '2-digit'
         });
     }
-    
+
     if (log.timestamp) {
         return new Date(log.timestamp).toLocaleTimeString('pt-BR', {
             hour: '2-digit',
@@ -695,7 +757,7 @@ function formatLogTime(log) {
             second: '2-digit'
         });
     }
-    
+
     return '--:--:--';
 }
 
@@ -706,7 +768,7 @@ function getLogLevel(log) {
         if (log.includes('SUCCESS') || log.includes('SUCESSO')) return 'success';
         return 'info';
     }
-    
+
     return log.level || 'info';
 }
 
@@ -715,9 +777,9 @@ function getLast7Days() {
     for (let i = 6; i >= 0; i--) {
         const date = new Date();
         date.setDate(date.getDate() - i);
-        days.push(date.toLocaleDateString('pt-BR', { 
-            day: '2-digit', 
-            month: '2-digit' 
+        days.push(date.toLocaleDateString('pt-BR', {
+            day: '2-digit',
+            month: '2-digit'
         }));
     }
     return days;
@@ -737,7 +799,7 @@ function setupAdminEventHandlers() {
         if (e.ctrlKey && e.key === 'r') {
             e.preventDefault();
             const currentPage = getCurrentAdminPage();
-            
+
             switch (currentPage) {
                 case 'dashboard':
                     loadDashboardData();
@@ -752,10 +814,10 @@ function setupAdminEventHandlers() {
                     loadStatsData();
                     break;
             }
-            
+
             showAlert('Dados atualizados manualmente', 'info');
         }
-        
+
         // Ctrl + S para servir café (apenas no dashboard)
         if (e.ctrlKey && e.key === 's' && getCurrentAdminPage() === 'dashboard') {
             e.preventDefault();

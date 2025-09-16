@@ -1,8 +1,6 @@
 #include "web_server.h"
-#include <SPIFFS.h>
-#include <ArduinoJson.h>
-#include <AsyncJson.h>
-#include "system_utils.h"
+
+extern RFIDManager rfidManager;
 
 // Constructor
 WebServerManager::WebServerManager(AuthManager &auth, Logger &log, UserManager &users, CoffeeController &coffee)
@@ -221,15 +219,41 @@ void WebServerManager::setupWebSocket() {
         } else if (type == WS_EVT_DISCONNECT) {
             Serial.printf("❌ WS client %u disconnected\n", client->id());
         } else if (type == WS_EVT_DATA) {
-            data[len] = 0;
-            String msg = (char*)data;
-            Serial.printf("📩 WS received: %s\n", msg.c_str());
-            // TODO: parse actions like get_stats if needed
+            // --- START OF MODIFIED LOGIC ---
+            AwsFrameInfo *info = (AwsFrameInfo*)arg;
+            if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
+                data[len] = 0;
+                String msg = (char*)data;
+                
+                StaticJsonDocument<256> doc;
+                deserializeJson(doc, msg);
+                
+                String msgType = doc["type"];
+
+                if (msgType == "start_scan_for_add") {
+                    Serial.println("🌐 WS: Recebido pedido para iniciar leitura de novo cartão.");
+                    rfidManager.setScanMode(SCAN_FOR_ADD);
+                } else {
+                    Serial.printf("📩 WS received: %s\n", msg.c_str());
+                }
+            }
         }
     });
 
     server.addHandler(&ws);
 }
+
+void WebServerManager::pushScannedUID(const String &uid) {
+    StaticJsonDocument<128> doc;
+    doc["type"] = "new_rfid_uid";
+    JsonObject data = doc.createNestedObject("data");
+    data["uid"] = uid;
+
+    String json;
+    serializeJson(doc, json);
+    ws.textAll(json);
+}
+
 
 void WebServerManager::pushStatus() {
     StaticJsonDocument<1024> doc;

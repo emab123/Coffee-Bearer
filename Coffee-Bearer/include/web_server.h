@@ -4,6 +4,10 @@
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
+#include <SPIFFS.h>
+#include <AsyncJson.h>
+#include "system_utils.h"
+#include "RFID_manager.h"
 
 class AuthManager;
 class Logger;
@@ -20,6 +24,7 @@ public:
     void pushStatus();
     void pushLog(const String &log);
     void pushUserUpdate(const String &uid);
+    void pushScannedUID(const String &uid);
 
 private:
     AsyncWebServer server;

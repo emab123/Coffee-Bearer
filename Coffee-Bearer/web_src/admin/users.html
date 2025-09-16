@@ -73,8 +73,14 @@
                     <form id="addUserForm" class="form-grid">
                         <div class="form-group">
                             <label class="form-label" for="userUID">UID do Cartão RFID *</label>
-                            <input type="text" id="userUID" class="form-input" placeholder="XX XX XX XX" required>
-                            <small class="form-help">Aproxime o cartão RFID do leitor para capturar automaticamente</small>
+                            <div style="display: flex; gap: 10px;">
+                                <input type="text" id="userUID" class="form-input" placeholder="Aguardando leitura..." required>
+                                <button type="button" class="btn btn-primary" id="scanCardBtn">
+                                    <span id="scanBtnText">📡 Ler Cartão</span>
+                                    <span id="scanSpinner" class="spinner" style="display: none; width: 20px; height: 20px;"></span>
+                                </button>
+                            </div>
+                             <small class="form-help" id="scanStatus">Clique em "Ler Cartão" e aproxime uma nova tag do leitor.</small>
                         </div>
                         <div class="form-group">
                             <label class="form-label" for="userName">Nome do Usuário *</label>

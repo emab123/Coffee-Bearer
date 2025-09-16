@@ -5,6 +5,7 @@ extern UserManager userManager;
 extern CoffeeController coffeeController;
 extern FeedbackManager feedbackManager;
 extern Logger logger;
+extern WebServerManager webServer;
 
 RFIDManager::RFIDManager() : 
     mfrc522(nullptr), 
@@ -99,7 +100,22 @@ void RFIDManager::loop() {
     
     // Extrair UID da tag
     String uid = readUID();
+    // Se estiver no modo de adicionar, tratar o UID e retornar
     
+    if (currentMode == SCAN_FOR_ADD) {
+        if (!userManager->userExists(uid)) {
+            DEBUG_PRINTF("Novo UID capturado para adicionar: %s\n", uid.c_str());
+            webServer.pushScannedUID(uid); // Enviar UID via WebSocket
+        } else {
+            DEBUG_PRINTLN("Cartão já cadastrado, ignorando.");
+            // Opcional: enviar uma mensagem de erro de volta
+        }
+        currentMode = SCAN_NORMAL; // Voltar ao modo normal
+        startCooldown();
+        mfrc522->PICC_HaltA();
+        return;
+    }
+
     if (uid.length() == 0) {
         DEBUG_PRINTLN("UID inválido lido");
         mfrc522->PICC_HaltA();
@@ -403,5 +419,14 @@ void RFIDManager::handleRFIDResult(const String& uid, const String& userName, RF
             details += ", Créditos restantes: " + String(creditsRemaining);
         }
         logger->logSystemEvent("Evento RFID", details);
+    }
+}
+
+void RFIDManager::setScanMode(ScanMode mode) {
+    this->currentMode = mode;
+    if (mode == SCAN_FOR_ADD) {
+        DEBUG_PRINTLN("RFID Manager: Modo de leitura para adicionar usuário ativado.");
+    } else {
+        DEBUG_PRINTLN("RFID Manager: Modo de leitura normal ativado.");
     }
 }

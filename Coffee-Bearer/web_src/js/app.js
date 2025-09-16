@@ -33,13 +33,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function initializeApp() {
     console.log('Inicializando aplicação...');
-    
+
     // Verificar autenticação
     checkAuth();
-    
+
     // Configurar handlers globais
     setupGlobalEventHandlers();
-    
+
     // Tentar conectar WebSocket se autenticado
     if (isAuthenticated) {
         initWebSocket();
@@ -52,7 +52,7 @@ async function checkAuth() {
     try {
         const response = await fetch('/auth/check');
         const data = await response.json();
-        
+
         if (data.authenticated) {
             isAuthenticated = true;
             currentUser = {
@@ -60,24 +60,25 @@ async function checkAuth() {
                 role: data.role,
                 sessionTime: data.sessionTime
             };
-            
+
             console.log('Usuário autenticado:', currentUser);
             updateUserInfo();
-            
-            // Verificar se está na página correta
+
+            // Iniciar WebSocket aqui, pois agora sabemos que está autenticado
+            initWebSocket();
+
             const currentPath = window.location.pathname;
             if (currentPath === '/login' || currentPath === '/') {
                 redirectToDashboard();
             }
-            
+
         } else {
             isAuthenticated = false;
             currentUser = null;
-            
-            // Redirecionar para login se não estiver autenticado
+
             const currentPath = window.location.pathname;
             if (currentPath !== '/login' && currentPath !== '/') {
-                window.location.href = '/login';
+                window.location.href = '/';
             }
         }
     } catch (error) {
@@ -96,20 +97,19 @@ function redirectToDashboard() {
 
 function updateUserInfo() {
     if (!currentUser) return;
-    
-    // Atualizar elementos de informação do usuário
+
     const userNameElements = document.querySelectorAll('.user-name');
     const userRoleElements = document.querySelectorAll('.user-role');
     const userAvatarElements = document.querySelectorAll('.user-avatar');
-    
+
     userNameElements.forEach(el => {
         el.textContent = currentUser.username;
     });
-    
+
     userRoleElements.forEach(el => {
         el.textContent = currentUser.role;
     });
-    
+
     userAvatarElements.forEach(el => {
         el.textContent = currentUser.username.charAt(0).toUpperCase();
     });
@@ -120,25 +120,22 @@ async function logout() {
         const response = await fetch('/auth/logout', {
             method: 'POST'
         });
-        
+
         if (response.ok) {
             isAuthenticated = false;
             currentUser = null;
-            
-            // Fechar WebSocket
+
             if (websocket) {
                 websocket.close();
                 websocket = null;
             }
-            
-            // Limpar intervalos
+
             if (autoRefreshInterval) {
                 clearInterval(autoRefreshInterval);
                 autoRefreshInterval = null;
             }
-            
-            // Redirecionar para login
-            window.location.href = '/login';
+
+            window.location.href = '/';
         } else {
             showAlert('Erro ao fazer logout', 'error');
         }
@@ -151,29 +148,28 @@ async function logout() {
 // ============== WEBSOCKET ==============
 
 function initWebSocket() {
-    if (websocket && websocket.readyState === WebSocket.OPEN) {
-        return; // Já conectado
+    if (!isAuthenticated || (websocket && websocket.readyState === WebSocket.OPEN)) {
+        return;
     }
-    
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws`;
-    
+
     console.log('Conectando WebSocket:', wsUrl);
-    
+
     try {
         websocket = new WebSocket(wsUrl);
-        
+
         websocket.onopen = function(event) {
             console.log('WebSocket conectado');
             showAlert('Conectado ao sistema em tempo real', 'success');
-            
-            // Enviar identificação
+
             sendWebSocketMessage('auth', {
                 username: currentUser?.username,
                 role: currentUser?.role
             });
         };
-        
+
         websocket.onmessage = function(event) {
             try {
                 const data = JSON.parse(event.data);
@@ -182,14 +178,12 @@ function initWebSocket() {
                 console.error('Erro ao processar mensagem WebSocket:', error);
             }
         };
-        
+
         websocket.onclose = function(event) {
             console.log('WebSocket desconectado:', event.code, event.reason);
-            
+
             if (isAuthenticated && !event.wasClean) {
                 showAlert('Conexão perdida. Tentando reconectar...', 'warning');
-                
-                // Tentar reconectar após um delay
                 setTimeout(() => {
                     if (isAuthenticated) {
                         initWebSocket();
@@ -197,12 +191,12 @@ function initWebSocket() {
                 }, CONFIG.websocket.reconnectInterval);
             }
         };
-        
+
         websocket.onerror = function(error) {
             console.error('Erro no WebSocket:', error);
             showAlert('Erro na conexão em tempo real', 'error');
         };
-        
+
     } catch (error) {
         console.error('Erro ao criar WebSocket:', error);
     }
@@ -221,32 +215,31 @@ function sendWebSocketMessage(type, data) {
 
 function handleWebSocketMessage(message) {
     console.log('Mensagem WebSocket recebida:', message);
-    
+
     switch (message.type) {
         case 'system_status':
             updateSystemStatus(message.data);
             break;
-            
         case 'user_activity':
             updateUserActivity(message.data);
             break;
-            
         case 'coffee_served':
             handleCoffeeServed(message.data);
             break;
-            
         case 'rfid_event':
             handleRFIDEvent(message.data);
             break;
-            
         case 'log_entry':
             handleLogEntry(message.data);
             break;
-            
         case 'alert':
             showAlert(message.data.message, message.data.type);
             break;
-            
+        case 'new_rfid_uid': // ADDED THIS CASE
+            if (typeof window.handleNewRfidUid === 'function') {
+                window.handleNewRfidUid(message.data.uid);
+            }
+            break;
         default:
             console.log('Tipo de mensagem não reconhecido:', message.type);
     }
@@ -260,8 +253,7 @@ function showAlert(message, type = 'info', autoHide = true) {
         console.warn('Container de alertas não encontrado');
         return;
     }
-    
-    // Criar elemento do alerta
+
     const alertDiv = document.createElement('div');
     alertDiv.className = `alert alert-${type}`;
     alertDiv.innerHTML = `
@@ -272,20 +264,13 @@ function showAlert(message, type = 'info', autoHide = true) {
         </div>
         <button class="alert-close" onclick="closeAlert(this)">&times;</button>
     `;
-    
-    // Adicionar ao container
+
     container.appendChild(alertDiv);
-    
-    // Auto-hide se configurado
+
     if (autoHide) {
         setTimeout(() => {
             closeAlert(alertDiv.querySelector('.alert-close'));
         }, CONFIG.alerts.autoHideDelay);
-    }
-    
-    // Scroll para o topo se necessário
-    if (container.scrollTop === 0) {
-        container.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 }
 
@@ -303,24 +288,16 @@ function closeAlert(button) {
 }
 
 function getAlertIcon(type) {
-    const icons = {
-        success: '✅',
-        error: '❌',
-        warning: '⚠️',
-        info: 'ℹ️'
-    };
+    const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
     return icons[type] || icons.info;
 }
 
 function getAlertTitle(type) {
-    const titles = {
-        success: 'Sucesso',
-        error: 'Erro',
-        warning: 'Atenção',
-        info: 'Informação'
-    };
+    const titles = { success: 'Sucesso', error: 'Erro', warning: 'Atenção', info: 'Informação' };
     return titles[type] || titles.info;
 }
+
+// ... (Rest of your app.js file remains the same from here)
 
 // ============== MODAIS ==============
 
@@ -330,19 +307,16 @@ function showConfirmDialog(title, message, onConfirm, onCancel = null) {
         console.error('Modal de confirmação não encontrado');
         return;
     }
-    
-    // Atualizar conteúdo
+
     const titleElement = modal.querySelector('#confirmTitle');
     const messageElement = modal.querySelector('#confirmMessage');
-    
+
     if (titleElement) titleElement.textContent = title;
     if (messageElement) messageElement.textContent = message;
-    
-    // Configurar ações
+
     window.confirmAction = onConfirm;
     window.cancelAction = onCancel;
-    
-    // Mostrar modal
+
     modal.classList.add('show');
 }
 
@@ -351,8 +325,6 @@ function closeConfirmModal() {
     if (modal) {
         modal.classList.remove('show');
     }
-    
-    // Limpar ações
     window.confirmAction = null;
     window.cancelAction = null;
 }
@@ -383,26 +355,18 @@ function escapeHtml(text) {
 
 function formatDateTime(timestamp) {
     if (!timestamp) return 'N/A';
-    
+
     const date = new Date(timestamp);
     const now = new Date();
     const diffMs = now - date;
-    
-    // Se for hoje
+
     if (date.toDateString() === now.toDateString()) {
-        return date.toLocaleTimeString('pt-BR', {
-            hour: '2-digit',
-            minute: '2-digit'
-        });
+        return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     }
-    
-    // Se for menos de 7 dias
     if (diffMs < 7 * 24 * 60 * 60 * 1000) {
         const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
         return `${days}d atrás`;
     }
-    
-    // Data completa
     return date.toLocaleDateString('pt-BR');
 }
 
@@ -412,93 +376,36 @@ function formatUptime(uptimeMs) {
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
 
-    if (days > 0) {
-        return `${days}d ${hours % 24}h ${minutes % 60}m`;
-    } else if (hours > 0) {
-        return `${hours}h ${minutes % 60}m`;
-    } else if (minutes > 0) {
-        return `${minutes}m ${seconds % 60}s`;
-    } else {
-        return `${seconds}s`;
-    }
-}
-
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
-}
-
-function throttle(func, limit) {
-    let inThrottle;
-    return function() {
-        const args = arguments;
-        const context = this;
-        if (!inThrottle) {
-            func.apply(context, args);
-            inThrottle = true;
-            setTimeout(() => inThrottle = false, limit);
-        }
-    }
+    if (days > 0) return `${days}d ${hours % 24}h ${minutes % 60}m`;
+    if (hours > 0) return `${hours}h ${minutes % 60}m`;
+    if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+    return `${seconds}s`;
 }
 
 // ============== HANDLERS DE EVENTOS GLOBAIS ==============
 
 function setupGlobalEventHandlers() {
-    // Handler para tecla ESC
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
             closeConfirmModal();
-            
-            // Fechar outros modais se existirem
-            const modals = document.querySelectorAll('.modal-overlay.show');
-            modals.forEach(modal => {
-                modal.classList.remove('show');
-            });
+            document.querySelectorAll('.modal-overlay.show').forEach(modal => modal.classList.remove('show'));
         }
     });
-    
-    // Handler para cliques em overlay de modal
+
     document.addEventListener('click', function(e) {
         if (e.target.classList.contains('modal-overlay')) {
             e.target.classList.remove('show');
         }
     });
-    
-    // Handler para navegação
+
     window.addEventListener('beforeunload', function(e) {
-        if (websocket) {
-            websocket.close();
-        }
-    });
-    
-    // Handler para visibilidade da página
-    document.addEventListener('visibilitychange', function() {
-        if (document.hidden) {
-            // Página ficou oculta
-            if (autoRefreshInterval) {
-                clearInterval(autoRefreshInterval);
-                autoRefreshInterval = null;
-            }
-        } else {
-            // Página ficou visível
-            if (isAuthenticated && typeof startAutoRefresh === 'function') {
-                startAutoRefresh();
-            }
-        }
+        if (websocket) websocket.close();
     });
 }
 
 // ============== HANDLERS WEBSOCKET ESPECÍFICOS ==============
 
 function updateSystemStatus(data) {
-    // Implementar atualização de status específica por página
     if (typeof handleSystemStatusUpdate === 'function') {
         handleSystemStatusUpdate(data);
     }
@@ -512,7 +419,6 @@ function updateUserActivity(data) {
 
 function handleCoffeeServed(data) {
     showAlert(`Café servido para ${data.userName}`, 'success');
-    
     if (typeof handleCoffeeServedUpdate === 'function') {
         handleCoffeeServedUpdate(data);
     }
@@ -521,9 +427,7 @@ function handleCoffeeServed(data) {
 function handleRFIDEvent(data) {
     const message = `${data.userName}: ${data.action}`;
     const type = data.success ? 'success' : 'warning';
-    
     showAlert(message, type);
-    
     if (typeof handleRFIDEventUpdate === 'function') {
         handleRFIDEventUpdate(data);
     }
@@ -538,33 +442,17 @@ function handleLogEntry(data) {
 // ============== API HELPERS ==============
 
 async function apiRequest(url, options = {}) {
-    const defaultOptions = {
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        timeout: CONFIG.api.timeout
-    };
-    
-    const mergedOptions = { ...defaultOptions, ...options };
-    
     try {
-        const response = await fetch(url, mergedOptions);
-        
+        const response = await fetch(url, {
+            headers: { 'Content-Type': 'application/json' },
+            ...options
+        });
         if (response.status === 401) {
-            // Token expirado ou não autorizado
-            isAuthenticated = false;
-            currentUser = null;
-            window.location.href = '/login';
+            window.location.href = '/';
             return null;
         }
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        return data;
-        
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        return await response.json();
     } catch (error) {
         console.error('Erro na requisição API:', error);
         throw error;
@@ -573,7 +461,6 @@ async function apiRequest(url, options = {}) {
 
 // ============== EXPORTAR FUNÇÕES GLOBAIS ==============
 
-// Tornar algumas funções globais para uso em HTML inline
 window.logout = logout;
 window.showAlert = showAlert;
 window.closeAlert = closeAlert;

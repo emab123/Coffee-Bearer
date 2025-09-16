@@ -2,43 +2,65 @@
 import os
 import gzip
 import shutil
+from pathlib import Path
 
-SRC_DIR = "web_src"          # editable files
-OUT_DIR = os.path.join("data", "web")  # compressed output
+# This line is crucial - it imports PlatformIO's build environment
+Import("env") # type: ignore
 
-def ensure_outdir(path: str) -> None:
-    """Ensure the target directory exists."""
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+def compress_web_assets(source, target, env):
+    """
+    Compresses web assets from web_src to the data directory before
+    the SPIFFS image is created. This function is called by PlatformIO.
+    """
+    print("\n" + "="*15 + ">> Compressing Web Assets <<" + "="*15 + "\n")
 
-def compress_file(src_path: str, out_path: str) -> None:
-    # Skip if already up-to-date
-    if os.path.exists(out_path) and os.path.getmtime(out_path) >= os.path.getmtime(src_path):
-        print(f"✔ Skipping (up-to-date): {src_path}")
+    # --- Configuration ---
+    # CORRECTED: Use $PROJECT_DIR to point to the root of your project folder
+    src_dir = Path(env.subst("$PROJECT_DIR")) / "web_src"
+    
+    # Target directory for compressed files (inside the project's 'data' folder)
+    out_dir = Path(env.subst("$PROJECT_DATA_DIR")) / "web"
+    
+    # File extensions to compress
+    compressible_exts = [".html", ".css", ".js"]
+    # File extensions to simply copy
+    copy_exts = [".ico"]
+
+    if not src_dir.exists():
+        print(f"Warning: Source directory '{src_dir}' not found. Skipping compression.")
         return
 
-    ensure_outdir(out_path)
+    # --- Processing Logic ---
+    for src_path in src_dir.rglob("*"):
+        if not src_path.is_file():
+            continue
 
-    # Compress
-    with open(src_path, "rb") as f_in, gzip.open(out_path, "wb", compresslevel=9) as f_out:
-        shutil.copyfileobj(f_in, f_out)
+        rel_path = src_path.relative_to(src_dir)
+        out_path = out_dir / rel_path
 
-    print(f"📁 Compressed: {src_path} → {out_path}")
+        # Ensure the target directory exists
+        out_path.parent.mkdir(parents=True, exist_ok=True)
 
+        # Skip if the destination file is newer than the source
+        if out_path.exists() and out_path.stat().st_mtime >= src_path.stat().st_mtime:
+            print(f"✔ Skipping (up-to-date): {rel_path}")
+            continue
 
-def main():
-    print(f"\n\n{'='*15}>> Compressing Web Assets <<{'='*15}\n\n")
+        # Decide whether to compress or copy
+        if src_path.suffix in compressible_exts:
+            # Compress the file
+            gz_out_path = out_path.with_suffix(src_path.suffix + ".gz")
+            with open(src_path, "rb") as f_in, gzip.open(gz_out_path, "wb", compresslevel=9) as f_out:
+                shutil.copyfileobj(f_in, f_out)
+            print(f"📁 Compressed: {rel_path} → {gz_out_path.relative_to(out_dir)}")
 
-    for root, _, files in os.walk(SRC_DIR):
-        for file in files:
-            if file.endswith((".html", ".css", ".js")):
-                src_path = os.path.join(root, file)
-                rel_path = os.path.relpath(src_path, SRC_DIR)
-                out_path = os.path.join(OUT_DIR, rel_path + ".gz")
+        elif src_path.suffix in copy_exts:
+            # Copy the file
+            shutil.copy2(src_path, out_path)
+            print(f"📄 Copied: {rel_path} → {out_path.relative_to(out_dir)}")
 
-                compress_file(src_path, out_path)
+    print("\n" + "="*15 + ">> Asset Processing Complete <<" + "="*15 + "\n")
 
-    print(f"\n\n{'='*15}>> Compression Complete <<{'='*15}\n\n")
-
-
-if __name__ == "__main__":
-    main()
+# --- PlatformIO Integration ---
+# This hook ties our function to the filesystem build process.
+env.AddPreAction("$BUILD_DIR/spiffs.bin", compress_web_assets) # type: ignore
