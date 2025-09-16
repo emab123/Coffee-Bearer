@@ -1,5 +1,4 @@
 #include "web_server.h"
-#include <WiFi.h>
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
 #include <AsyncJson.h>
@@ -23,71 +22,66 @@ void WebServerManager::begin() {
     Serial.println("🌐 Web server started");
 }
 
-
-// Helper: serve /web/<base>/<page>.html or .html.gz and add gzip header if needed
-void WebServerManager::sendHtmlFile(AsyncWebServerRequest *req, const String &baseDir, const String &page) {
-    String cleanPage = page;
-    // sanitize: remove trailing slashes
-    if (cleanPage.endsWith("/")) cleanPage.remove(cleanPage.length()-1);
-
-    String file = String("/web/") + baseDir + "/" + cleanPage + ".html";
-    String gz = file + ".gz";
-
-    bool gzExists = SPIFFS.exists(gz);
-    bool plainExists = SPIFFS.exists(file);
-    String toServe = gzExists ? gz : (plainExists ? file : String());
-
-    Serial.printf("➡ Request %s -> try %s (gz=%d plain=%d)\n", req->url().c_str(), toServe.c_str(), gzExists, plainExists);
-
-    if (toServe.length() == 0) {
-        req->send(404, "text/plain", "Page not found");
-        return;
-    }
-
-    // content type from extension (only html here, but keep flexible)
-    const char *contentType = "text/html";
-    AsyncWebServerResponse *response = req->beginResponse(SPIFFS, toServe, contentType);
-    if (gzExists) response->addHeader("Content-Encoding", "gzip");
-    // optional: disable aggressive caching for HTML pages during dev
-    response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-    req->send(response);
-}
-
-/* -------------------- Static Routes -------------------- */
+/* -------------------- Static Routes (Corrected & Simplified) -------------------- */
 void WebServerManager::setupStaticRoutes() {
-    // --- Pretty root redirects (optional): /admin -> dashboard, /user -> dashboard
-    server.on("/admin", HTTP_GET, [this](AsyncWebServerRequest *req) {
-        this->sendHtmlFile(req, "admin", "dashboard");
+    // Helper lambda to send a gzipped HTML file if it exists, otherwise the plain version
+    auto serveHtml = [](AsyncWebServerRequest *request, const String& path) {
+        String gzPath = path + ".gz";
+        if (SPIFFS.exists(gzPath)) {
+            AsyncWebServerResponse *response = request->beginResponse(SPIFFS, gzPath, "text/html");
+            response->addHeader("Content-Encoding", "gzip");
+            request->send(response);
+        } else if (SPIFFS.exists(path)) {
+            request->send(SPIFFS, path, "text/html");
+        } else {
+            request->send(404, "text/plain", "Page Not Found");
+        }
+    };
+
+    // --- Explicit Page Routes ---
+    server.on("/", HTTP_GET, [serveHtml](AsyncWebServerRequest *request) {
+        serveHtml(request, "/web/login.html");
     });
-    server.on("/user", HTTP_GET, [this](AsyncWebServerRequest *req) {
-        this->sendHtmlFile(req, "user", "dashboard");
+    server.on("/admin/dashboard", HTTP_GET, [serveHtml](AsyncWebServerRequest *request) {
+        serveHtml(request, "/web/admin/dashboard.html");
+    });
+    server.on("/admin/users", HTTP_GET, [serveHtml](AsyncWebServerRequest *request) {
+        serveHtml(request, "/web/admin/users.html");
+    });
+    server.on("/admin/settings", HTTP_GET, [serveHtml](AsyncWebServerRequest *request) {
+        serveHtml(request, "/web/admin/settings.html");
+    });
+    server.on("/admin/logs", HTTP_GET, [serveHtml](AsyncWebServerRequest *request) {
+        serveHtml(request, "/web/admin/logs.html");
+    });
+    server.on("/admin/stats", HTTP_GET, [serveHtml](AsyncWebServerRequest *request) {
+        serveHtml(request, "/web/admin/stats.html");
     });
 
-    // --- Pretty single-segment pages: /admin/<page> and /user/<page>
-    // Note: the regex handlers must be registered BEFORE serveStatic so they take priority.
-    server.on("^/admin/([A-Za-z0-9_-]+)/*$", HTTP_GET, [this](AsyncWebServerRequest *req) {
-        String page = req->pathArg(0);
-        this->sendHtmlFile(req, "admin", page);
+    // --- User pages ---
+     server.on("/user/dashboard", HTTP_GET, [serveHtml](AsyncWebServerRequest *request) {
+        serveHtml(request, "/web/user/dashboard.html");
+    });
+     server.on("/user/profile", HTTP_GET, [serveHtml](AsyncWebServerRequest *request) {
+        serveHtml(request, "/web/user/profile.html");
+    });
+     server.on("/user/history", HTTP_GET, [serveHtml](AsyncWebServerRequest *request) {
+        serveHtml(request, "/web/user/history.html");
     });
 
-    server.on("^/user/([A-Za-z0-9_-]+)/*$", HTTP_GET, [this](AsyncWebServerRequest *req) {
-        String page = req->pathArg(0);
-        this->sendHtmlFile(req, "user", page);
-    });
 
-    // --- Static assets and fallback (registered last)
-    // serveStatic will serve files under /web (and will automatically serve .gz if present)
-    server.serveStatic("/", SPIFFS, "/web/")
-        .setDefaultFile("login.html")
-        .setCacheControl("max-age=600");
+    // --- Static Asset Handler (for CSS, JS, etc.) ---
+    // This will automatically handle .gz compression if the file exists
+    server.serveStatic("/css", SPIFFS, "/web/css").setCacheControl("max-age=31536000");
+    server.serveStatic("/js", SPIFFS, "/web/js").setCacheControl("max-age=31536000");
+    server.serveStatic("/favicon.ico", SPIFFS, "/web/favicon.ico");
 
-    // helpful NotFound logger to catch any remaining mismatches
-    server.onNotFound([](AsyncWebServerRequest *req) {
-        Serial.printf("❗ 404 %s  (host=%s)\n", req->url().c_str(), req->client()->remoteIP().toString().c_str());
-        req->send(404, "text/plain", "Not found");
+    // --- Not Found Handler ---
+    server.onNotFound([](AsyncWebServerRequest *request) {
+        Serial.printf("❗ 404 Not Found: %s\n", request->url().c_str());
+        request->send(404, "text/plain", "Not Found");
     });
 }
-
 
 /* -------------------- Auth Routes -------------------- */
 void WebServerManager::setupAuthRoutes() {
@@ -104,7 +98,6 @@ void WebServerManager::setupAuthRoutes() {
         String sessionId = this->authManager.login(username, password, ip);
         if (sessionId.length() > 0) {
             UserRole role = this->authManager.getSessionRole(sessionId);
-            // FIX: redirect to /admin/dashboard (not .html)
             String redirectUrl = (role == ROLE_ADMIN) ? "/admin/dashboard" : "/user/dashboard";
             
             AsyncWebServerResponse *res = req->beginResponse(200, "application/json",
