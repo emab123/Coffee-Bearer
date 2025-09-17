@@ -22,6 +22,7 @@ struct LogEntry {
 class Logger {
 private:
     std::vector<LogEntry> logBuffer;
+    std::vector<CoffeeConsumptionEvent> consumptionLog;
     unsigned long lastFlush;
     bool fileLogging;
     bool serialLogging;
@@ -62,7 +63,8 @@ public:
     void logUserManagement(const String& action, const String& uid, const String& userName);
     void logAuthEvent(const String& username, const String& action, const String& ip);
     void logWebRequest(const String& method, const String& path, const String& ip, int statusCode);
-    
+    void logCoffeeServed(const String& uid, const String& userName, int remainingCoffees);
+
     // Consulta de logs
     std::vector<LogEntry> getRecentLogs(int count = 50);
     std::vector<LogEntry> getLogsByLevel(LogLevel level, int count = 50);
@@ -74,6 +76,11 @@ public:
     int getTotalLogCount();
     int getLogCountByLevel(LogLevel level);
     int getLogCountByCategory(const String& category);
+    int getTotalConsumption(unsigned long since);
+    float getDailyAverage(int days);
+    String getPeakDayOfWeek(int days);
+    std::vector<int> getConsumptionLastDays(int days);
+    std::vector<int> getConsumptionByHour();
     unsigned long getOldestLogTime();
     unsigned long getNewestLogTime();
     

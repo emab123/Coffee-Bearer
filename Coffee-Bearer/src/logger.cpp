@@ -126,11 +126,97 @@ void Logger::logRFIDEvent(const String& uid, const String& userName, const Strin
     }
 }
 
-void Logger::logCoffeeServed(const String& userName, int remainingCoffees) {
+void Logger::logCoffeeServed(const String& uid, const String& userName, int remainingCoffees) {
     String message = "Café servido para " + userName;
     String details = "Cafés restantes: " + String(remainingCoffees);
     info(message, details);
+
+    // Record the consumption event for statistics
+    consumptionLog.push_back({millis(), uid});
+
+    // Prune the log if it gets too large
+    if (consumptionLog.size() > MAX_LOG_ENTRIES * 2) {
+        consumptionLog.erase(consumptionLog.begin(), consumptionLog.begin() + 50);
+    }
 }
+
+float Logger::getDailyAverage(int days) {
+    if (days == 0) return 0.0;
+    unsigned long period = (unsigned long)days * MILLIS_PER_DAY;
+    int total = getTotalConsumption(millis() - period);
+    return (float)total / days;
+}
+
+
+
+String Logger::getPeakDayOfWeek(int days) {
+    int dayCounts[7] = {0}; // Sun, Mon, Tue, Wed, Thu, Fri, Sat
+    unsigned long period = (unsigned long)days * MILLIS_PER_DAY;
+    unsigned long cutoff = millis() - period;
+
+    for (const auto& event : consumptionLog) {
+        if (event.timestamp >= cutoff) {
+            // A simple way to get day of the week without full time library
+            // This is an approximation based on uptime
+            int day = (event.timestamp / MILLIS_PER_DAY) % 7;
+            dayCounts[day]++;
+        }
+    }
+
+    int maxCount = 0;
+    int peakDay = 0;
+    for (int i = 0; i < 7; i++) {
+        if (dayCounts[i] > maxCount) {
+            maxCount = dayCounts[i];
+            peakDay = i;
+        }
+    }
+
+    const char* daysOfWeek[] = {"Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"};
+    return daysOfWeek[peakDay];
+}
+
+
+std::vector<int> Logger::getConsumptionLastDays(int days) {
+    std::vector<int> dailyTotals(days, 0);
+    unsigned long now = millis();
+
+    for (const auto& event : consumptionLog) {
+        long timeAgo = now - event.timestamp;
+        if (timeAgo >= 0 && (unsigned long)timeAgo < (unsigned long)days * MILLIS_PER_DAY) {
+            int dayIndex = (days - 1) - (timeAgo / MILLIS_PER_DAY);
+            if(dayIndex >= 0 && dayIndex < days) {
+                dailyTotals[dayIndex]++;
+            }
+        }
+    }
+    return dailyTotals;
+}
+
+std::vector<int> Logger::getConsumptionByHour() {
+    std::vector<int> hourlyTotals(24, 0);
+    unsigned long now = millis();
+    unsigned long todayStart = now - (now % MILLIS_PER_DAY);
+
+    for (const auto& event : consumptionLog) {
+        if (event.timestamp >= todayStart) {
+            int hour = ((event.timestamp - todayStart) / MILLIS_PER_HOUR) % 24;
+            hourlyTotals[hour]++;
+        }
+    }
+    return hourlyTotals;
+}
+
+int Logger::getTotalConsumption(unsigned long since) {
+    int count = 0;
+    for (const auto& event : consumptionLog) {
+        if (event.timestamp >= since) {
+            count++;
+        }
+    }
+    return count;
+}
+
 
 void Logger::logSystemEvent(const String& event, const String& details) {
     log(LOG_INFO, "SYSTEM", event, details);

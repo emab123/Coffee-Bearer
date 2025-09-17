@@ -17,6 +17,8 @@ Leitura e processamento de tags RFID
 #include "logger.h"
 #include "web_server.h"
 
+class WebServerManager;
+
 enum RFIDResult {
     RFID_SUCCESS,
     RFID_ACCESS_DENIED,
@@ -48,11 +50,12 @@ private:
     unsigned long cooldownEndTime;
     bool initialized;
     
-    // Referências para outros managers
+    // --- References to other managers ---
     UserManager& userManager;
     CoffeeController& coffeeController;
     FeedbackManager& feedbackManager;
     Logger& logger;
+    WebServerManager& webServer;
     ScanMode currentMode;
     
     String readUID();
@@ -63,7 +66,7 @@ private:
     void handleRFIDResult(const String& uid, const String& userName, RFIDResult result);
     
 public:
-    RFIDManager(UserManager& users, CoffeeController& coffee, Logger& log, FeedbackManager& feedback);
+    RFIDManager(UserManager& users, CoffeeController& coffee, Logger& log, FeedbackManager& feedback, WebServerManager& web);
     ~RFIDManager();
     
     // Inicialização

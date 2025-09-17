@@ -1,29 +1,42 @@
 #include "web_server.h"
+#include "auth_manager.h"
+#include "logger.h"
+#include "user_manager.h"
+#include "coffee_controller.h"
+#include "beeps_and_bleeps.h"
+#include "RFID_manager.h"
+#include "system_utils.h"
+#include <SPIFFS.h>
+#include <AsyncJson.h>
 
-extern RFIDManager rfidManager;
-extern FeedbackManager feedbackManager; // ADD THIS EXTERN
-
-// Constructor
-WebServerManager::WebServerManager(AuthManager &auth, Logger &log, UserManager &users, CoffeeController &coffee, FeedbackManager &feedback)
-    : server(80), ws("/ws"), authManager(auth), logger(log), userManager(users), coffeeController(coffee), feedbackManager(feedback) {}
+WebServerManager::WebServerManager(AsyncWebServer &server, AuthManager &auth, Logger &log, UserManager &users, CoffeeController &coffee, FeedbackManager &feedback)
+    : server(server), 
+      ws("/ws"), 
+      authManager(auth), 
+      logger(log), 
+      userManager(users), 
+      coffeeController(coffee), 
+      feedbackManager(feedback),
+      rfidManager(nullptr) // Initialize pointer to null
+{}
 
 void WebServerManager::begin() {
-    if (!SPIFFS.begin(true)) {
-        Serial.println("⚠️ SPIFFS mount failed");
-    }
-
     setupStaticRoutes();
     setupAuthRoutes();
     setupApiRoutes();
     setupWebSocket();
-
     server.begin();
     Serial.println("🌐 Web server started");
 }
 
-/* -------------------- Static Routes (Corrected & Simplified) -------------------- */
+void WebServerManager::setRfidManager(RFIDManager* rfid) {
+    this->rfidManager = rfid;
+}
+
+
+/* -------------------- Static Routes -------------------- */
 void WebServerManager::setupStaticRoutes() {
-    // Helper lambda to send a gzipped HTML file if it exists, otherwise the plain version
+    // Helper lambda to serve gzipped files
     auto serveHtml = [](AsyncWebServerRequest *request, const String& path) {
         String gzPath = path + ".gz";
         if (SPIFFS.exists(gzPath)) {
@@ -36,46 +49,29 @@ void WebServerManager::setupStaticRoutes() {
             request->send(404, "text/plain", "Page Not Found");
         }
     };
-
-    // --- Explicit Page Routes ---
+    
     server.on("/", HTTP_GET, [serveHtml](AsyncWebServerRequest *request) {
         serveHtml(request, "/web/login.html");
     });
-    server.on("/admin/dashboard", HTTP_GET, [serveHtml](AsyncWebServerRequest *request) {
-        serveHtml(request, "/web/admin/dashboard.html");
-    });
-    server.on("/admin/users", HTTP_GET, [serveHtml](AsyncWebServerRequest *request) {
-        serveHtml(request, "/web/admin/users.html");
-    });
-    server.on("/admin/settings", HTTP_GET, [serveHtml](AsyncWebServerRequest *request) {
-        serveHtml(request, "/web/admin/settings.html");
-    });
-    server.on("/admin/logs", HTTP_GET, [serveHtml](AsyncWebServerRequest *request) {
-        serveHtml(request, "/web/admin/logs.html");
-    });
-    server.on("/admin/stats", HTTP_GET, [serveHtml](AsyncWebServerRequest *request) {
-        serveHtml(request, "/web/admin/stats.html");
-    });
 
-    // --- User pages ---
-     server.on("/user/dashboard", HTTP_GET, [serveHtml](AsyncWebServerRequest *request) {
-        serveHtml(request, "/web/user/dashboard.html");
-    });
-     server.on("/user/profile", HTTP_GET, [serveHtml](AsyncWebServerRequest *request) {
-        serveHtml(request, "/web/user/profile.html");
-    });
-     server.on("/user/history", HTTP_GET, [serveHtml](AsyncWebServerRequest *request) {
-        serveHtml(request, "/web/user/history.html");
-    });
-
-
-    // --- Static Asset Handler (for CSS, JS, etc.) ---
-    // This will automatically handle .gz compression if the file exists
+    // Page routes
+    const char* pageRoutes[] = {
+    "/admin/dashboard", "/admin/users", "/admin/settings", 
+    "/admin/logs", "/admin/stats", "/user/dashboard", 
+    "/user/profile", "/user/history"
+    };
+    for (const char* route : pageRoutes) {
+        server.on(route, HTTP_GET, [serveHtml, route](AsyncWebServerRequest *request) {
+            String path = String("/web") + route + ".html";
+            serveHtml(request, path);
+        });
+    }
+    // Static assets
     server.serveStatic("/css", SPIFFS, "/web/css").setCacheControl("max-age=31536000");
     server.serveStatic("/js", SPIFFS, "/web/js").setCacheControl("max-age=31536000");
     server.serveStatic("/favicon.ico", SPIFFS, "/web/favicon.ico");
 
-    // --- Not Found Handler ---
+    // Not Found handler
     server.onNotFound([](AsyncWebServerRequest *request) {
         Serial.printf("❗ 404 Not Found: %s\n", request->url().c_str());
         request->send(404, "text/plain", "Not Found");
@@ -169,26 +165,20 @@ void WebServerManager::setupApiRoutes() {
 
         JsonObject jsonObj = json.as<JsonObject>();
         
-        // You can now access the values sent from the form
         if (jsonObj.containsKey("logLevel")) {
             int logLevel = jsonObj["logLevel"];
-            // Example: logger.setMinimumLevel((LogLevel)logLevel);
             Serial.printf("Received new log level: %d\n", logLevel);
         }
         if (jsonObj.containsKey("timezone")) {
             int timezone = jsonObj["timezone"];
-            // Example: timeClient.setTimeOffset(timezone * 3600);
             Serial.printf("Received new timezone offset: %d\n", timezone);
         }
         
-        // For now, just send a success response
         request->send(200, "application/json", "{\"success\":true, \"message\":\"Settings received\"}");
     });
     server.addHandler(systemSettingsHandler);
-    
+
     // --- User Management Endpoint ---
-    
-    // GET /api/users - List all users
     server.on("/api/users", HTTP_GET, [this](AsyncWebServerRequest *req) {
         if (!this->authManager.isAuthenticated(req, ROLE_ADMIN)) {
             req->send(403, "application/json", "{\"error\":\"Forbidden\"}");
@@ -198,7 +188,6 @@ void WebServerManager::setupApiRoutes() {
         req->send(200, "application/json", json);
     });
 
-    // This single handler will process POST (add) and DELETE (remove) with a JSON body
     AsyncCallbackJsonWebHandler* userHandler = new AsyncCallbackJsonWebHandler("/api/users", [this](AsyncWebServerRequest *request, JsonVariant &json) {
         if (!this->authManager.isAuthenticated(request, ROLE_ADMIN)) {
             request->send(403, "application/json", "{\"error\":\"Forbidden\"}");
@@ -207,7 +196,6 @@ void WebServerManager::setupApiRoutes() {
 
         JsonObject jsonObj = json.as<JsonObject>();
         
-        // ADD USER (POST)
         if (request->method() == HTTP_POST) {
             String uid = jsonObj["uid"];
             String name = jsonObj["name"];
@@ -217,7 +205,6 @@ void WebServerManager::setupApiRoutes() {
                 request->send(400, "application/json", "{\"success\":false, \"message\":\"Failed to add user\"}");
             }
         }
-        // REMOVE USER (DELETE)
         else if (request->method() == HTTP_DELETE) {
             String uid = jsonObj["uid"];
             if (this->userManager.removeUser(uid)) {
@@ -250,21 +237,38 @@ void WebServerManager::setupApiRoutes() {
         String json = this->logger.getLogsAsJson(limit);
         req->send(200, "application/json", "{\"logs\":" + json + "}");
     });
-    
+
+    server.on("/api/stats", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!this->authManager.isAuthenticated(request, ROLE_ADMIN)) {
+            request->send(403, "application/json", "{\"error\":\"Forbidden\"}");
+            return;
+        }
+        StaticJsonDocument<2048> doc;
+        JsonObject kpis = doc.createNestedObject("kpis");
+        kpis["totalServed"] = this->coffeeController.getTotalServed();
+        kpis["dailyAverage"] = String(this->logger.getDailyAverage(7), 1);
+        kpis["peakDay"] = this->logger.getPeakDayOfWeek(7);
+        std::vector<UserCredits> topUsersList = this->userManager.getTopUsersByConsumption(1);
+        if (!topUsersList.empty()) {
+            kpis["topUser"] = topUsersList[0].name;
+        } else {
+            kpis["topUser"] = "N/A";
+        }
+        String response;
+        serializeJson(doc, response);
+        request->send(200, "application/json", response);
+    });
 }
 
 
 /* -------------------- WebSocket -------------------- */
 void WebServerManager::setupWebSocket() {
-    ws.onEvent([this](AsyncWebSocket *server, AsyncWebSocketClient *client,
-                      AwsEventType type, void *arg, uint8_t *data, size_t len) {
+    ws.onEvent([this](AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
         if (type == WS_EVT_CONNECT) {
             Serial.printf("🔌 WS client %u connected\n", client->id());
-            this->pushStatus();
         } else if (type == WS_EVT_DISCONNECT) {
             Serial.printf("❌ WS client %u disconnected\n", client->id());
         } else if (type == WS_EVT_DATA) {
-            // --- START OF MODIFIED LOGIC ---
             AwsFrameInfo *info = (AwsFrameInfo*)arg;
             if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
                 data[len] = 0;
@@ -276,15 +280,13 @@ void WebServerManager::setupWebSocket() {
                 String msgType = doc["type"];
 
                 if (msgType == "start_scan_for_add") {
-                    Serial.println("🌐 WS: Recebido pedido para iniciar leitura de novo cartão.");
-                    rfidManager.setScanMode(SCAN_FOR_ADD);
-                } else {
-                    Serial.printf("📩 WS received: %s\n", msg.c_str());
+                    if (this->rfidManager) {
+                        this->rfidManager->setScanMode(SCAN_FOR_ADD);
+                    }
                 }
             }
         }
     });
-
     server.addHandler(&ws);
 }
 
@@ -293,29 +295,7 @@ void WebServerManager::pushScannedUID(const String &uid) {
     doc["type"] = "new_rfid_uid";
     JsonObject data = doc.createNestedObject("data");
     data["uid"] = uid;
-
     String json;
     serializeJson(doc, json);
     ws.textAll(json);
-}
-
-
-void WebServerManager::pushStatus() {
-    StaticJsonDocument<1024> doc;
-    systemStatusToJson(doc, this->logger, this->coffeeController, this->userManager, this->authManager);
-    String json;
-    serializeJson(doc, json);
-    ws.textAll("{\"type\":\"system_status\",\"data\":" + json + "}");
-}
-
-void WebServerManager::pushLog(const String &log) {
-    ws.textAll("{\"type\":\"log_entry\",\"data\":" + log + "}");
-}
-
-void WebServerManager::pushUserUpdate(const String &uid) {
-    UserCredits* user = this->userManager.getUserByUID(uid);
-    if(user){
-        String userJson = this->userManager.userToJson(*user);
-        ws.textAll("{\"type\":\"user_activity\",\"data\":" + userJson + "}");
-    }
 }

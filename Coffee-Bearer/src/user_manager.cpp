@@ -1,7 +1,5 @@
 #include "user_manager.h"
-#include <Preferences.h>
-#include <algorithm>
-#include <ArduinoJson.h>
+
 
 UserManager::UserManager() : 
     lastWeeklyReset(0),
@@ -56,12 +54,13 @@ bool UserManager::addUser(const String& uid, const String& name) {
         return false;
     }
     
-    UserCredits newUser;
+  UserCredits newUser;
     newUser.uid = uid.c_str();
     newUser.name = sanitizeName(name);
     newUser.credits = INITIAL_CREDITS;
     newUser.lastUsed = 0;
     newUser.isActive = true;
+    newUser.totalConsumed = 0;
     
     users.push_back(newUser);
     dataChanged = true;
@@ -144,6 +143,7 @@ bool UserManager::consumeCredit(const String& uid) {
     }
     
     user->credits--;
+    user->totalConsumed++;
     updateLastUsed(uid);
     dataChanged = true;
     
@@ -151,6 +151,21 @@ bool UserManager::consumeCredit(const String& uid) {
                 user->name.c_str(), user->credits);
     
     return true;
+}
+
+std::vector<UserCredits> UserManager::getTopUsersByConsumption(int count) {
+    std::vector<UserCredits> sortedUsers = users;
+    
+    std::sort(sortedUsers.begin(), sortedUsers.end(), 
+        [](const UserCredits& a, const UserCredits& b) {
+            return a.totalConsumed > b.totalConsumed;
+        });
+    
+    if (sortedUsers.size() > count) {
+        sortedUsers.resize(count);
+    }
+    
+    return sortedUsers;
 }
 
 bool UserManager::addCredits(const String& uid, int credits) {
@@ -275,13 +290,12 @@ UserCredits UserManager::getMostActiveUser() {
 std::vector<UserCredits> UserManager::getTopUsers(int count) {
     std::vector<UserCredits> sortedUsers = users;
     
-    // Ordenar por última utilização (mais recente primeiro)
+
     std::sort(sortedUsers.begin(), sortedUsers.end(), 
         [](const UserCredits& a, const UserCredits& b) {
             return a.lastUsed > b.lastUsed;
         });
     
-    // Limitar ao número solicitado
     if (sortedUsers.size() > count) {
         sortedUsers.resize(count);
     }

@@ -1,11 +1,3 @@
-/*
-==================================================
-SISTEMA CAFETEIRA RFID - v4.0 REFATORADO
-Controle Inteligente com Interface Web Separada
-Admin/Usuário, Autenticação e LED Neopixel
-==================================================
-*/
-
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
@@ -14,7 +6,6 @@ Admin/Usuário, Autenticação e LED Neopixel
 #include <WiFiUdp.h>
 #include <ESPmDNS.h>
 
-// Inclusão dos módulos customizados
 #include "config.h"
 #include "RFID_manager.h"
 #include "beeps_and_bleeps.h"
@@ -24,27 +15,44 @@ Admin/Usuário, Autenticação e LED Neopixel
 #include "coffee_controller.h"
 #include "web_server.h"
 
+// --- Central Application Context ---
+struct AppContext {
+    AsyncWebServer server;
+    WiFiUDP ntpUDP;
+    NTPClient timeClient;
 
-// Instâncias globais
-AsyncWebServer server(80);
-WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, NTP_SERVER, GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC);
+    FeedbackManager feedbackManager;
+    UserManager userManager;
+    AuthManager authManager;
+    Logger logger;
+    CoffeeController coffeeController;
+    WebServerManager webServer;
+    RFIDManager rfidManager;
 
-// Managers
-FeedbackManager feedbackManager; // Must be created first
-UserManager userManager;
-AuthManager authManager;
-Logger logger;
-// These managers now require other managers to be passed to them
-CoffeeController coffeeController(feedbackManager); 
-RFIDManager rfidManager(userManager, coffeeController, logger, feedbackManager);
-WebServerManager webServer(authManager, logger, userManager, coffeeController, feedbackManager);
+    AppContext() : 
+        server(80),
+        timeClient(ntpUDP, NTP_SERVER, GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC),
+        coffeeController(feedbackManager), 
+        webServer(server, authManager, logger, userManager, coffeeController, feedbackManager),
+        rfidManager(userManager, coffeeController, logger, feedbackManager, webServer)
+    {
+        webServer.setRfidManager(&rfidManager);
+    }
+};
 
+// Create a single global instance of the AppContext
+AppContext app;
 
-// Variáveis de controle
-unsigned long lastResetCheck = 0;
-unsigned long lastStatusUpdate = 0;
+// --- Global Variables (minimal) ---
 bool systemInitialized = false;
+
+// --- Function Prototypes ---
+void connectWiFi();
+void initializeSystem();
+void processSerialCommands();
+void updateSystemStatus();
+void handleWiFiReconnection();
+void checkWeeklyReset();
 
 void connectWiFi() {
     Serial.printf("Conectando ao WiFi: %s\n", WIFI_SSID);
@@ -55,29 +63,28 @@ void connectWiFi() {
     while (WiFi.status() != WL_CONNECTED && attempts < 30) {
         delay(500);
         Serial.print(".");
-        feedbackManager.showStatusInitializing(); 
-        feedbackManager.update();
+        app.feedbackManager.showStatusInitializing(); 
+        app.feedbackManager.update();
         attempts++;
     }
     
     if (WiFi.status() == WL_CONNECTED) {
         Serial.println(F("\nWiFi conectado!"));
         Serial.printf("IP: %s\n", WiFi.localIP().toString().c_str());
-        logger.info("WiFi conectado - IP: " + WiFi.localIP().toString());
+        app.logger.info("WiFi conectado - IP: " + WiFi.localIP().toString());
 
         if (MDNS.begin(MDNS_HOSTNAME)) {
             MDNS.addService("http", "tcp", 80);
             Serial.printf("Serviço mDNS iniciado. Acesse em: http://%s.local\n", MDNS_HOSTNAME);
-            logger.info("mDNS iniciado: http://" + String(MDNS_HOSTNAME) + ".local");
+            app.logger.info("mDNS iniciado: http://" + String(MDNS_HOSTNAME) + ".local");
         } else {
             Serial.println("Erro ao iniciar mDNS!");
-            logger.error("Falha ao iniciar mDNS");
+            app.logger.error("Falha ao iniciar mDNS");
         }
-
     } else {
         Serial.println(F("\nFalha na conexão WiFi!"));
-        logger.error("Falha na conexão WiFi");
-        feedbackManager.showStatusError();
+        app.logger.error("Falha na conexão WiFi");
+        app.feedbackManager.showStatusError();
     }
 }
 
@@ -89,34 +96,33 @@ void initializeSystem() {
     Serial.println(F("     SISTEMA CAFETEIRA RFID v4.0 - INICIANDO     "));
     Serial.println(F("=================================================="));
     
-    feedbackManager.begin();
+    app.feedbackManager.begin();
 
     if (!SPIFFS.begin(true)) {
         Serial.println(F("ERRO FATAL: Falha ao montar SPIFFS"));
         while(1) {
-            feedbackManager.signalError();
+            app.feedbackManager.signalError();
             delay(100);
         }
     }
     
-    logger.begin();
-    logger.info("Sistema iniciando...");
+    app.logger.begin();
+    app.logger.info("Sistema iniciando...");
     
-    authManager.begin();
-    userManager.begin();
-    coffeeController.begin();
-    rfidManager.begin();
+    app.authManager.begin();
+    app.userManager.begin();
+    app.coffeeController.begin();
+    app.rfidManager.begin();
     
     connectWiFi();
-    webServer.begin();
-    timeClient.begin();
-    timeClient.update();
+    app.webServer.begin(); // Web server now uses the server instance from the context
+    app.timeClient.begin();
+    app.timeClient.update();
     
     systemInitialized = true;
-    feedbackManager.showStatusReady();
+    app.feedbackManager.showStatusReady();
     
-    logger.info("Sistema iniciado com sucesso");
-    // --- Use the MDNS_HOSTNAME from config.h ---
+    app.logger.info("Sistema iniciado com sucesso");
     Serial.println("==================================================");
     Serial.println(F("Sistema pronto! Acesse com um dos endereços abaixo:"));
     Serial.printf("   - http://%s\n", WiFi.localIP().toString().c_str());
@@ -126,21 +132,12 @@ void initializeSystem() {
 
 void performFactoryReset() {
     Serial.println("Executando reset de fábrica...");
-    feedbackManager.showStatusBusy();
-    
-    // Limpar dados dos usuários
-    userManager.clearAllData();
-    
-    // Limpar dados do controlador de café
-    coffeeController.clearAllData();
-    
-    // Limpar logs
-    logger.clearLogs();
-    
-    // Limpar autenticação
-    authManager.resetToDefault();
-    
-    logger.info("Reset de fábrica executado");
+    app.feedbackManager.showStatusBusy();
+    app.userManager.clearAllData();
+    app.coffeeController.clearAllData();
+    app.logger.clearLogs();
+    app.authManager.resetToDefault();
+    app.logger.info("Reset de fábrica executado");
     Serial.println("Reset de fábrica concluído. Reiniciando...");
     
     delay(2000);
@@ -170,9 +167,9 @@ void handleAddUserCommand(String originalCmd) {
     name.trim();
     
     if (uid.length() > 0 && name.length() > 0) {
-        if (userManager.addUser(uid, name)) {
+        if (app.userManager.addUser(uid, name)) {
             Serial.printf("Usuário '%s' adicionado com sucesso!\n", name.c_str());
-            logger.info("Usuário adicionado via serial: " + name + " (UID: " + uid + ")");
+            app.logger.info("Usuário adicionado via serial: " + name + " (UID: " + uid + ")");
         } else {
             Serial.println("Falha ao adicionar usuário!");
         }
@@ -183,11 +180,14 @@ void handleAddUserCommand(String originalCmd) {
 
 void processSerialCommands() {
     if (!Serial.available()) return;
-    
     String cmd = Serial.readStringUntil('\n');
     cmd.trim();
     String originalCmd = cmd;
     cmd.toLowerCase();
+
+    if (cmd == "list") {
+        app.userManager.printUserList();
+    }
     
     if (cmd == "help") {
         Serial.println(F("\n========== COMANDOS DISPONÍVEIS =========="));
@@ -218,12 +218,12 @@ void processSerialCommands() {
         Serial.printf("WiFi: %s (IP: %s)\n", 
             WiFi.status() == WL_CONNECTED ? "Conectado" : "Desconectado",
             WiFi.localIP().toString().c_str());
-        Serial.printf("Usuários: %d/%d\n", userManager.getTotalUsers(), MAX_USERS);
-        Serial.printf("Cafés servidos: %d\n", coffeeController.getTotalServed());
+        Serial.printf("Usuários: %d/%d\n", app.userManager.getTotalUsers(), MAX_USERS);
+        Serial.printf("Cafés servidos: %d\n", app.coffeeController.getTotalServed());
         Serial.printf("Cafés restantes: %d/%d\n", 
-            coffeeController.getRemainingCoffees(), MAX_COFFEES);
+            app.coffeeController.getRemainingCoffees(), MAX_COFFEES);
         Serial.printf("Sistema ocupado: %s\n", 
-            coffeeController.isBusy() ? "Sim" : "Não");
+            app.coffeeController.isBusy() ? "Sim" : "Não");
         Serial.printf("Uptime: %lu ms\n", millis());
         Serial.println("========================\n");
     }
@@ -234,41 +234,41 @@ void processSerialCommands() {
         String uid = originalCmd.substring(7);
         uid.trim();
         uid.toUpperCase();
-        if (userManager.removeUser(uid)) {
+        if (app.userManager.removeUser(uid)) {
             Serial.println("Usuário removido com sucesso!");
-            logger.info("Usuário removido via serial: " + uid);
+            app.logger.info("Usuário removido via serial: " + uid);
         } else {
             Serial.println("Usuário não encontrado!");
         }
     }
     else if (cmd == "list") {
-        userManager.printUserList();
+        app.userManager.printUserList();
     }
     else if (cmd == "serve") {
-        if (coffeeController.serveCoffee("MANUAL", nullptr)) {
+        if (app.coffeeController.serveCoffee("MANUAL", nullptr)) {
             Serial.println("Café servido manualmente!");
         } else {
             Serial.println("Não foi possível servir café!");
         }
     }
     else if (cmd == "refill") {
-        coffeeController.refillContainer();
+        app.coffeeController.refillContainer();
         Serial.println("Garrafa reabastecida!");
-        logger.info("Garrafa reabastecida via serial");
+        app.logger.info("Garrafa reabastecida via serial");
     }
     else if (cmd == "stats") {
-        coffeeController.printStats();
+        app.coffeeController.printStats();
     }
     else if (cmd == "logs") {
-        logger.printLogs();
+        app.logger.printLogs();
     }
     else if (cmd == "clearlogs") {
-        logger.clearLogs();
+        app.logger.clearLogs();
         Serial.println("Logs limpos!");
     }
     else if (cmd == "restart") {
         Serial.println("Reiniciando sistema...");
-        logger.info("Sistema reiniciado via serial");
+        app.logger.info("Sistema reiniciado via serial");
         delay(1000);
         ESP.restart();
     }
@@ -297,29 +297,23 @@ void checkWeeklyReset() {
     
     lastCheck = millis();
     
-    if (userManager.shouldPerformWeeklyReset()) {
+    if (app.userManager.shouldPerformWeeklyReset()) {
         Serial.println("Executando reset semanal de créditos...");
-        userManager.performWeeklyReset();
-        logger.info("Reset semanal de créditos executado");
-        feedbackManager.signalServing();
+        app.userManager.performWeeklyReset();
+        app.logger.info("Reset semanal de créditos executado");
+        app.feedbackManager.signalServing();
         delay(2000);
-        feedbackManager.showStatusReady();
+        app.feedbackManager.showStatusReady();
     }
 }
 
 void updateSystemStatus() {
-    // Esta função define a cor de fundo se NENHUMA animação estiver acontecendo.
-    // A prioridade é mostrar se o café está vazio
-    if (coffeeController.isEmpty()) {
-        feedbackManager.showStatusEmpty();
-    } 
-    // Depois, se está acabando (ex: menos de 5 cafés)
-    else if (coffeeController.getRemainingCoffees() < 5) {
-        feedbackManager.showStatusLow();
-    }
-    // Se não, tudo OK
-    else {
-        feedbackManager.showStatusReady();
+    if (app.coffeeController.isEmpty()) {
+        app.feedbackManager.showStatusEmpty();
+    } else if (app.coffeeController.getRemainingCoffees() < 5) {
+        app.feedbackManager.showStatusLow();
+    } else {
+        app.feedbackManager.showStatusReady();
     }
 }
 
@@ -329,7 +323,7 @@ void handleWiFiReconnection() {
     if (WiFi.status() != WL_CONNECTED) {
         if (millis() - lastReconnectAttempt > 30000) { // Tenta reconectar a cada 30s
             Serial.println("WiFi desconectado. Tentando reconectar...");
-            feedbackManager.showStatusInitializing();
+            app.feedbackManager.showStatusInitializing();
             WiFi.reconnect();
             lastReconnectAttempt = millis();
         }
@@ -350,7 +344,7 @@ void loop() {
     processSerialCommands();
     
     // Processar RFID
-    rfidManager.loop();
+    app.rfidManager.loop();
     
     // Verificar reset semanal
     checkWeeklyReset();
@@ -361,12 +355,12 @@ void loop() {
     // Gerenciar reconexão WiFi
     handleWiFiReconnection();
     
-    feedbackManager.update(); 
+    app.feedbackManager.update(); 
 
     // Atualizar NTP periodicamente
     static unsigned long lastNTPUpdate = 0;
     if (millis() - lastNTPUpdate > 3600000) { // A cada hora
-        timeClient.update();
+        app.timeClient.update();
         lastNTPUpdate = millis();
     }
     

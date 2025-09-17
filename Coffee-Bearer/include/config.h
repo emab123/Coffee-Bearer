@@ -193,6 +193,12 @@ struct UserCredits {
     int credits;
     unsigned long lastUsed;
     bool isActive;
+    int totalConsumed;
+};
+
+struct CoffeeConsumptionEvent {
+    unsigned long timestamp; // millis() at the time of consumption
+    String uid;
 };
 
 // ============== CONSTANTES CALCULADAS ==============

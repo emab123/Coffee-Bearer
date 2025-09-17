@@ -1,21 +1,20 @@
 #include "RFID_manager.h"
-
-extern WebServerManager webServer;
+#include "web_server.h"
 
 // --- Constructor ---
-RFIDManager::RFIDManager(UserManager& users, CoffeeController& coffee, Logger& log, FeedbackManager& feedback) : 
+RFIDManager::RFIDManager(UserManager& users, CoffeeController& coffee, Logger& log, FeedbackManager& feedback, WebServerManager& web) : 
     mfrc522(nullptr),
     userManager(users),
     coffeeController(coffee),
     logger(log),
     feedbackManager(feedback),
+    webServer(&web), // Store the web server reference
     lastUID(""),
     lastReadTime(0),
     cooldownEndTime(0),
     initialized(false),
     currentMode(SCAN_NORMAL)
-{
-}
+{}
 
 RFIDManager::~RFIDManager() {
     end();
@@ -59,22 +58,26 @@ void RFIDManager::end() {
 }
 
 void RFIDManager::loop() {
-    if (!initialized || !mfrc522 || isInCooldown()) {
+    // Exit immediately if not initialized or if no new card is present
+    if (!initialized || !mfrc522 || !mfrc522->PICC_IsNewCardPresent()) {
         return;
     }
-    
-    if (!mfrc522->PICC_IsNewCardPresent() || !mfrc522->PICC_ReadCardSerial()) {
+
+    // Try to read the card. If it fails, exit.
+    if (!mfrc522->PICC_ReadCardSerial()) {
         return;
     }
-    
+
+    // --- Card has been successfully read, now process it ---
+
+    // First, check if we are in a cooldown period to prevent rapid reads
+    if (isInCooldown()) {
+        mfrc522->PICC_HaltA(); // Halt communication to release the card
+        return;
+    }
+
     String uid = readUID();
     if (uid.isEmpty()) {
-        mfrc522->PICC_HaltA();
-        return;
-    }
-    
-    // Prevent rapid re-reads of the same card
-    if (uid == lastUID && (millis() - lastReadTime) < 2000) {
         mfrc522->PICC_HaltA();
         return;
     }
@@ -87,13 +90,16 @@ void RFIDManager::loop() {
     if (currentMode == SCAN_FOR_ADD) {
         if (!userManager.userExists(uid)) {
             DEBUG_PRINTF("Novo UID capturado para adicionar: %s\n", uid.c_str());
-            webServer.pushScannedUID(uid); // Send UID via WebSocket
+            if (webServer) { // Check if the pointer is valid
+                webServer->pushScannedUID(uid); 
+            }
         } else {
             DEBUG_PRINTLN("Cartão já cadastrado, ignorando.");
-            feedbackManager.signalError(); // Signal that the card is already known
+            feedbackManager.signalError();
         }
-        currentMode = SCAN_NORMAL; // Always return to normal mode after a scan
-    } 
+        currentMode = SCAN_NORMAL;
+    }
+
     // Handle normal operation
     else {
         RFIDResult result;
@@ -127,7 +133,7 @@ void RFIDManager::setScanMode(ScanMode mode) {
     }
 }
 
-// --- Private Methods ---
+// --- Private Methods (Unchanged) ---
 
 RFIDResult RFIDManager::processNormalUser(const String& uid) {
     if (coffeeController.isBusy()) return RFID_SYSTEM_BUSY;

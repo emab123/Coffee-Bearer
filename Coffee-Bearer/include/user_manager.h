@@ -7,9 +7,12 @@ Controle de créditos e acesso
 
 #pragma once
 
+#include "config.h"
 #include <Arduino.h>
 #include <vector>
-#include "config.h"
+#include <Preferences.h>
+#include <algorithm>
+#include <ArduinoJson.h>
 
 class UserManager {
 private:
@@ -60,6 +63,7 @@ public:
     int getActiveTodayCount();
     UserCredits getMostActiveUser();
     std::vector<UserCredits> getTopUsers(int count = 5);
+    std::vector<UserCredits> getTopUsersByConsumption(int count);
     
     // Utilitários
     void printUserList();
