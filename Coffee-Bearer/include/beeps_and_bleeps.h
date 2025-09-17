@@ -3,8 +3,10 @@
 #pragma once
 
 #include <Arduino.h>
-#include <Adafruit_NeoPixel.h>
+#include <FastLED.h>
 #include "config.h"
+
+#define FASTLED_ESP32_RMT_CHAN_OVERRIDE 0
 
 class FeedbackManager {
 public:
@@ -14,6 +16,7 @@ public:
     // --- Core Methods ---
     bool begin();
     void update(); // Must be called in the main loop
+    void setBrightness(uint8_t brightness);
 
     // --- Continuous Status Indicators ---
     void showStatusReady();
@@ -35,7 +38,7 @@ public:
 
 private:
 // --- LED Members ---
-    Adafruit_NeoPixel* strip;
+    CRGB leds[NEOPIXEL_COUNT];
     enum LedState { LED_STATIC, LED_ANIMATING };
     LedState ledState;
     uint32_t staticColor;

@@ -12,6 +12,7 @@ Admin/Usuário, Autenticação e LED Neopixel
 #include <SPIFFS.h>
 #include <NTPClient.h>
 #include <WiFiUdp.h>
+#include <ESPmDNS.h>
 
 // Inclusão dos módulos customizados
 #include "config.h"
@@ -30,13 +31,15 @@ WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, NTP_SERVER, GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC);
 
 // Managers
+FeedbackManager feedbackManager; // Must be created first
 UserManager userManager;
-CoffeeController coffeeController;
 AuthManager authManager;
 Logger logger;
-WebServerManager webServer(authManager, logger, userManager, coffeeController);
-RFIDManager rfidManager;
-FeedbackManager feedbackManager;
+// These managers now require other managers to be passed to them
+CoffeeController coffeeController(feedbackManager); 
+RFIDManager rfidManager(userManager, coffeeController, logger, feedbackManager);
+WebServerManager webServer(authManager, logger, userManager, coffeeController, feedbackManager);
+
 
 // Variáveis de controle
 unsigned long lastResetCheck = 0;
@@ -44,16 +47,16 @@ unsigned long lastStatusUpdate = 0;
 bool systemInitialized = false;
 
 void connectWiFi() {
-    
     Serial.printf("Conectando ao WiFi: %s\n", WIFI_SSID);
     WiFi.mode(WIFI_STA);
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     
     int attempts = 0;
     while (WiFi.status() != WL_CONNECTED && attempts < 30) {
-        delay(1000);
+        delay(500);
         Serial.print(".");
-        feedbackManager.signalRefill();
+        feedbackManager.showStatusInitializing(); 
+        feedbackManager.update();
         attempts++;
     }
     
@@ -61,6 +64,16 @@ void connectWiFi() {
         Serial.println(F("\nWiFi conectado!"));
         Serial.printf("IP: %s\n", WiFi.localIP().toString().c_str());
         logger.info("WiFi conectado - IP: " + WiFi.localIP().toString());
+
+        if (MDNS.begin(MDNS_HOSTNAME)) {
+            MDNS.addService("http", "tcp", 80);
+            Serial.printf("Serviço mDNS iniciado. Acesse em: http://%s.local\n", MDNS_HOSTNAME);
+            logger.info("mDNS iniciado: http://" + String(MDNS_HOSTNAME) + ".local");
+        } else {
+            Serial.println("Erro ao iniciar mDNS!");
+            logger.error("Falha ao iniciar mDNS");
+        }
+
     } else {
         Serial.println(F("\nFalha na conexão WiFi!"));
         logger.error("Falha na conexão WiFi");
@@ -90,17 +103,12 @@ void initializeSystem() {
     logger.info("Sistema iniciando...");
     
     authManager.begin();
-    rfidManager.begin();
     userManager.begin();
     coffeeController.begin();
+    rfidManager.begin();
     
-    // Conectar WiFi
     connectWiFi();
-    
-    // Inicializar servidor web
     webServer.begin();
-    
-    // Configurar NTP
     timeClient.begin();
     timeClient.update();
     
@@ -108,11 +116,14 @@ void initializeSystem() {
     feedbackManager.showStatusReady();
     
     logger.info("Sistema iniciado com sucesso");
-    Serial.print(F("Sistema pronto! Acesse: http://"));
-    Serial.println(WiFi.localIP());
-    Serial.println(F("Digite 'help' para comandos disponíveis"));
+    // --- Use the MDNS_HOSTNAME from config.h ---
+    Serial.println("==================================================");
+    Serial.println(F("Sistema pronto! Acesse com um dos endereços abaixo:"));
+    Serial.printf("   - http://%s\n", WiFi.localIP().toString().c_str());
+    Serial.printf("   - http://%s.local\n", MDNS_HOSTNAME);
     Serial.println(F("=================================================="));
 }
+
 void performFactoryReset() {
     Serial.println("Executando reset de fábrica...");
     feedbackManager.showStatusBusy();

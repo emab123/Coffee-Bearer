@@ -1,21 +1,20 @@
 #include "RFID_manager.h"
-#include "beeps_and_bleeps.h"
 
-extern UserManager userManager;
-extern CoffeeController coffeeController;
-extern FeedbackManager feedbackManager;
-extern Logger logger;
 extern WebServerManager webServer;
 
-RFIDManager::RFIDManager() : 
-    mfrc522(nullptr), 
+// --- Constructor ---
+RFIDManager::RFIDManager(UserManager& users, CoffeeController& coffee, Logger& log, FeedbackManager& feedback) : 
+    mfrc522(nullptr),
+    userManager(users),
+    coffeeController(coffee),
+    logger(log),
+    feedbackManager(feedback),
     lastUID(""),
     lastReadTime(0),
     cooldownEndTime(0),
     initialized(false),
-    userManager(nullptr),
-    coffeeController(nullptr),
-    logger(nullptr) {
+    currentMode(SCAN_NORMAL)
+{
 }
 
 RFIDManager::~RFIDManager() {
@@ -24,13 +23,10 @@ RFIDManager::~RFIDManager() {
 
 bool RFIDManager::begin() {
     if (initialized) {
-        end();
+        return true;
     }
     
-    // Configurar pinos SPI
     SPI.begin();
-    
-    // Inicializar MFRC522
     mfrc522 = new MFRC522(RFID_SS_PIN, RFID_RST_PIN);
     
     if (!mfrc522) {
@@ -40,7 +36,6 @@ bool RFIDManager::begin() {
     
     mfrc522->PCD_Init();
     
-    // Testar comunicação com o leitor
     if (!testRFID()) {
         DEBUG_PRINTLN("ERRO: Falha na comunicação com leitor RFID");
         delete mfrc522;
@@ -48,14 +43,7 @@ bool RFIDManager::begin() {
         return false;
     }
     
-    // Configurar referências para outros managers
-    this->userManager = &::userManager;
-    this->coffeeController = &::coffeeController;
-
-    this->logger = &::logger;
-    
     initialized = true;
-    
     DEBUG_PRINTLN("RFID Manager inicializado com sucesso");
     printRFIDInfo();
     
@@ -68,285 +56,107 @@ void RFIDManager::end() {
         mfrc522 = nullptr;
     }
     initialized = false;
-    DEBUG_PRINTLN("RFID Manager finalizado");
-}
-
-void RFIDManager::setManagers(UserManager* users, CoffeeController* coffee, Logger* log) {
-    this->userManager = users;
-    this->coffeeController = coffee;
-    this->logger = log;
 }
 
 void RFIDManager::loop() {
-    if (!initialized || !mfrc522) {
+    if (!initialized || !mfrc522 || isInCooldown()) {
         return;
     }
     
-    // Verificar se está no período de cooldown
-    if (isInCooldown()) {
+    if (!mfrc522->PICC_IsNewCardPresent() || !mfrc522->PICC_ReadCardSerial()) {
         return;
     }
     
-    // Verificar se há uma nova tag presente
-    if (!mfrc522->PICC_IsNewCardPresent()) {
-        return;
-    }
-    
-    // Tentar ler a tag
-    if (!mfrc522->PICC_ReadCardSerial()) {
-        DEBUG_PRINTLN("Falha ao ler cartão RFID");
-        return;
-    }
-    
-    // Extrair UID da tag
     String uid = readUID();
-    // Se estiver no modo de adicionar, tratar o UID e retornar
-    
-    if (currentMode == SCAN_FOR_ADD) {
-        if (!userManager->userExists(uid)) {
-            DEBUG_PRINTF("Novo UID capturado para adicionar: %s\n", uid.c_str());
-            webServer.pushScannedUID(uid); // Enviar UID via WebSocket
-        } else {
-            DEBUG_PRINTLN("Cartão já cadastrado, ignorando.");
-            // Opcional: enviar uma mensagem de erro de volta
-        }
-        currentMode = SCAN_NORMAL; // Voltar ao modo normal
-        startCooldown();
-        mfrc522->PICC_HaltA();
-        return;
-    }
-
-    if (uid.length() == 0) {
-        DEBUG_PRINTLN("UID inválido lido");
+    if (uid.isEmpty()) {
         mfrc522->PICC_HaltA();
         return;
     }
     
-    // Evitar leituras repetidas da mesma tag
+    // Prevent rapid re-reads of the same card
     if (uid == lastUID && (millis() - lastReadTime) < 2000) {
         mfrc522->PICC_HaltA();
         return;
     }
     
-    DEBUG_PRINTF("Tag RFID detectada: %s\n", uid.c_str());
-    
-    // Atualizar informações da última leitura
     lastUID = uid;
     lastReadTime = millis();
-    
-    RFIDResult result;
-    String userName = "";
-    
-    // Verificar se é a chave mestra
-    if (uid.equalsIgnoreCase(MASTER_UID)) {
-        result = RFID_MASTER_KEY;
-        userName = "MASTER";
-        processMasterKey();
-    } else {
-        // Processar usuário normal
-        result = processNormalUser(uid);
-        userName = userManager->getUserName(uid);
-        if (userName.length() == 0) {
-            userName = "DESCONHECIDO";
+    DEBUG_PRINTF("Tag RFID detectada: %s\n", uid.c_str());
+
+    // Handle scan-to-add mode for the web UI
+    if (currentMode == SCAN_FOR_ADD) {
+        if (!userManager.userExists(uid)) {
+            DEBUG_PRINTF("Novo UID capturado para adicionar: %s\n", uid.c_str());
+            webServer.pushScannedUID(uid); // Send UID via WebSocket
+        } else {
+            DEBUG_PRINTLN("Cartão já cadastrado, ignorando.");
+            feedbackManager.signalError(); // Signal that the card is already known
         }
+        currentMode = SCAN_NORMAL; // Always return to normal mode after a scan
+    } 
+    // Handle normal operation
+    else {
+        RFIDResult result;
+        String userName = "";
+        
+        if (uid.equalsIgnoreCase(MASTER_UID)) {
+            result = RFID_MASTER_KEY;
+            userName = "MASTER";
+            processMasterKey();
+        } else {
+            userName = userManager.getUserName(uid);
+            result = processNormalUser(uid);
+            if (userName.isEmpty()) {
+                userName = "DESCONHECIDO";
+            }
+        }
+        handleRFIDResult(uid, userName, result);
     }
     
-    // Tratar o resultado
-    handleRFIDResult(uid, userName, result);
-    
-    // Iniciar cooldown para evitar leituras repetidas
     startCooldown();
-    
-    // Parar comunicação com a tag
     mfrc522->PICC_HaltA();
     mfrc522->PCD_StopCrypto1();
 }
 
-void RFIDManager::setCooldownTime(unsigned long timeMs) {
-    // Para esta implementação, usamos a constante COOLDOWN_TIME_MS
-    // Uma implementação mais avançada poderia armazenar em uma variável
-    DEBUG_PRINTF("Cooldown configurado: %lu ms\n", timeMs);
-}
-
-unsigned long RFIDManager::getCooldownTime() {
-    return COOLDOWN_TIME_MS;
-}
-
-bool RFIDManager::isReady() {
-    return initialized && !isInCooldown() && coffeeController && !coffeeController->isBusy();
-}
-
-unsigned long RFIDManager::getRemainingCooldown() {
-    if (!isInCooldown()) {
-        return 0;
+void RFIDManager::setScanMode(ScanMode mode) {
+    this->currentMode = mode;
+    if (mode == SCAN_FOR_ADD) {
+        DEBUG_PRINTLN("RFID Manager: Modo de leitura para adicionar usuário ativado.");
+    } else {
+        DEBUG_PRINTLN("RFID Manager: Modo de leitura normal ativado.");
     }
-    return cooldownEndTime - millis();
 }
 
-bool RFIDManager::testRFID() {
-    if (!mfrc522) {
-        return false;
-    }
-    
-    // Testar comunicação básica
-    byte version = mfrc522->PCD_ReadRegister(MFRC522::VersionReg);
-    
-    // Versões conhecidas do MFRC522: 0x91, 0x92
-    if (version == 0x00 || version == 0xFF) {
-        DEBUG_PRINTF("RFID: Comunicação falhou (version: 0x%02X)\n", version);
-        return false;
-    }
-    
-    DEBUG_PRINTF("RFID: Comunicação OK (version: 0x%02X)\n", version);
-    return true;
-}
-
-String RFIDManager::formatUID(const String& uid) {
-    String formatted = uid;
-    formatted.toUpperCase();
-    formatted.trim();
-    return formatted;
-}
-
-bool RFIDManager::isValidUID(const String& uid) {
-    return userManager ? userManager->isValidUID(uid) : false;
-}
-
-void RFIDManager::printRFIDInfo() {
-    if (!mfrc522) {
-        DEBUG_PRINTLN("RFID não inicializado");
-        return;
-    }
-    
-    DEBUG_PRINTLN("\n=== INFORMAÇÕES DO LEITOR RFID ===");
-    
-    byte version = mfrc522->PCD_ReadRegister(MFRC522::VersionReg);
-    DEBUG_PRINTF("Versão do chip: 0x%02X\n", version);
-    
-    switch (version) {
-        case 0x91: DEBUG_PRINTLN("Chip: MFRC522 v1.0"); break;
-        case 0x92: DEBUG_PRINTLN("Chip: MFRC522 v2.0"); break;
-        default: DEBUG_PRINTLN("Chip: Desconhecido"); break;
-    }
-    
-    DEBUG_PRINTF("Pino SS: %d\n", RFID_SS_PIN);
-    DEBUG_PRINTF("Pino RST: %d\n", RFID_RST_PIN);
-    DEBUG_PRINTF("Cooldown: %lu ms\n", COOLDOWN_TIME_MS);
-    DEBUG_PRINTF("Master UID: %s\n", MASTER_UID);
-    DEBUG_PRINTF("Status: %s\n", isReady() ? "Pronto" : "Não Pronto");
-    
-    DEBUG_PRINTLN("=================================\n");
-}
-
-// Métodos privados
-
-String RFIDManager::readUID() {
-    if (!mfrc522) {
-        return "";
-    }
-    
-    String uid = "";
-    
-    for (byte i = 0; i < mfrc522->uid.size; i++) {
-        if (i > 0) uid += " ";
-        
-        if (mfrc522->uid.uidByte[i] < 0x10) {
-            uid += "0";
-        }
-        uid += String(mfrc522->uid.uidByte[i], HEX);
-    }
-    
-    uid.toUpperCase();
-    return uid;
-}
-
-bool RFIDManager::isInCooldown() {
-    return millis() < cooldownEndTime;
-}
-
-void RFIDManager::startCooldown() {
-    cooldownEndTime = millis() + COOLDOWN_TIME_MS;
-}
+// --- Private Methods ---
 
 RFIDResult RFIDManager::processNormalUser(const String& uid) {
-    if (!userManager || !coffeeController) {
-        return RFID_ERROR;
-    }
+    if (coffeeController.isBusy()) return RFID_SYSTEM_BUSY;
+    if (coffeeController.isEmpty()) return RFID_NO_COFFEE;
     
-    // Verificar se o sistema está ocupado
-    if (coffeeController->isBusy()) {
-        DEBUG_PRINTLN("Sistema ocupado");
-        return RFID_SYSTEM_BUSY;
-    }
+    UserCredits* user = userManager.getUserByUID(uid);
+    if (!user) return RFID_ACCESS_DENIED;
+    if (user->credits <= 0) return RFID_NO_CREDITS;
     
-    // Verificar se há café disponível
-    if (coffeeController->isEmpty()) {
-        DEBUG_PRINTLN("Sem café disponível");
-        return RFID_NO_COFFEE;
-    }
-    
-    // Verificar se o usuário existe
-    UserCredits* user = userManager->getUserByUID(uid);
-    if (!user) {
-        DEBUG_PRINTF("Usuário não encontrado: %s\n", uid.c_str());
-        return RFID_ACCESS_DENIED;
-    }
-    
-    // Verificar se o usuário tem créditos
-    if (user->credits <= 0) {
-        DEBUG_PRINTF("Usuário sem créditos: %s\n", user->name.c_str());
-        return RFID_NO_CREDITS;
-    }
-    
-    // Tentar servir café
-    if (coffeeController->serveCoffee(user->name, &user->credits)) {
-        // Atualizar dados do usuário
-        userManager->updateLastUsed(uid);
-        
-        DEBUG_PRINTF("Café servido para %s (créditos restantes: %d)\n", 
-                    user->name.c_str(), user->credits);
-        
-        // Log do evento
-        if (logger) {
-            logger->logRFIDEvent(uid, user->name, "CAFE_SERVIDO", true);
-            logger->logCoffeeServed(user->name, coffeeController->getRemainingCoffees());
-        }
-        
+    if (coffeeController.serveCoffee(user->name, &user->credits)) {
+        userManager.updateLastUsed(uid);
+        logger.logRFIDEvent(uid, user->name, "CAFE_SERVIDO", true);
         return RFID_SUCCESS;
     } else {
-        DEBUG_PRINTF("Falha ao servir café para %s\n", user->name.c_str());
-        
-        if (logger) {
-            logger->logRFIDEvent(uid, user->name, "FALHA_SERVIR", false);
-        }
-        
+        logger.logRFIDEvent(uid, user->name, "FALHA_SERVIR", false);
         return RFID_ERROR;
     }
 }
 
 void RFIDManager::processMasterKey() {
     DEBUG_PRINTLN("CHAVE MESTRA DETECTADA!");
-    
-    if (!coffeeController) {
-        return;
-    }
-    
-    // Reabastecer a cafeteira
-    coffeeController->refillContainer();
-    
-    // Log do evento
-    if (logger) {
-        logger->logRFIDEvent(MASTER_UID, "MASTER", "REABASTECIMENTO", true);
-        logger->logSystemEvent("Reabastecimento via chave mestra");
-    }
-    
-    DEBUG_PRINTLN("Sistema reabastecido via chave mestra");
+    coffeeController.refillContainer();
+    logger.logRFIDEvent(MASTER_UID, "MASTER", "REABASTECIMENTO", true);
 }
 
 void RFIDManager::handleRFIDResult(const String& uid, const String& userName, RFIDResult result) {
     switch (result) {
         case RFID_SUCCESS:
-            // The serving signal is handled by the CoffeeController
+            // The success signal is handled by CoffeeController upon completion
             break;
         case RFID_MASTER_KEY:
             feedbackManager.signalMasterKey();
@@ -361,72 +171,53 @@ void RFIDManager::handleRFIDResult(const String& uid, const String& userName, RF
             feedbackManager.signalError();
             break;
     }
-
-    // Log detalhado do resultado
-    String resultText = "";
-    int creditsRemaining = -1;
-    
-    if (userManager) {
-        UserCredits* user = userManager->getUserByUID(uid);
-        if (user) {
-            creditsRemaining = user->credits;
-        }
-    }
-    
-    switch (result) {
-        case RFID_SUCCESS:
-            resultText = "Café servido com sucesso";
-            DEBUG_PRINTF("✅ %s - %s (Créditos: %d)\n", 
-                        userName.c_str(), resultText.c_str(), creditsRemaining);
-            break;
-            
-        case RFID_ACCESS_DENIED:
-            resultText = "Acesso negado - usuário não cadastrado";
-            DEBUG_PRINTF("❌ %s - %s\n", uid.c_str(), resultText.c_str());
-            break;
-            
-        case RFID_NO_CREDITS:
-            resultText = "Sem créditos suficientes";
-            DEBUG_PRINTF("💳 %s - %s\n", userName.c_str(), resultText.c_str());
-            break;
-            
-        case RFID_SYSTEM_BUSY:
-            resultText = "Sistema ocupado";
-            DEBUG_PRINTF("⏳ %s - %s\n", userName.c_str(), resultText.c_str());
-            break;
-            
-        case RFID_NO_COFFEE:
-            resultText = "Sem café disponível";
-            DEBUG_PRINTF("☕ %s - %s\n", userName.c_str(), resultText.c_str());
-            break;
-            
-        case RFID_MASTER_KEY:
-            resultText = "Chave mestra - sistema reabastecido";
-            DEBUG_PRINTF("🔑 %s - %s\n", userName.c_str(), resultText.c_str());
-            break;
-            
-        case RFID_ERROR:
-        default:
-            resultText = "Erro do sistema";
-            DEBUG_PRINTF("🚨 %s - %s\n", userName.c_str(), resultText.c_str());
-            break;
-    }
-    
-    // Log adicional se disponível
-    if (logger) {
-        String details = "UID: " + uid + ", Resultado: " + resultText;
-        if (creditsRemaining >= 0) {
-            details += ", Créditos restantes: " + String(creditsRemaining);
-        }
-        logger->logSystemEvent("Evento RFID", details);
-    }
 }
 
-void RFIDManager::setScanMode(ScanMode mode) {
-    this->currentMode = mode;
-    if (mode == SCAN_FOR_ADD) {
-        DEBUG_PRINTLN("RFID Manager: Modo de leitura para adicionar usuário ativado.");
-    } else {
-        DEBUG_PRINTLN("RFID Manager: Modo de leitura normal ativado.");
+// --- Helper and Debug Methods (Unchanged) ---
+
+String RFIDManager::readUID() {
+    String uid = "";
+    for (byte i = 0; i < mfrc522->uid.size; i++) {
+        if (i > 0) uid += " ";
+        if (mfrc522->uid.uidByte[i] < 0x10) uid += "0";
+        uid += String(mfrc522->uid.uidByte[i], HEX);
     }
+    uid.toUpperCase();
+    return uid;
+}
+
+bool RFIDManager::isInCooldown() {
+    return millis() < cooldownEndTime;
+}
+
+void RFIDManager::startCooldown() {
+    cooldownEndTime = millis() + COOLDOWN_TIME_MS;
+}
+
+bool RFIDManager::testRFID() {
+    if (!mfrc522) return false;
+    byte version = mfrc522->PCD_ReadRegister(MFRC522::VersionReg);
+    return !(version == 0x00 || version == 0xFF);
+}
+
+void RFIDManager::printRFIDInfo() {
+    if (!mfrc522) {
+        DEBUG_PRINTLN("RFID não inicializado");
+        return;
+    }
+    DEBUG_PRINTLN("\n=== INFORMAÇÕES DO LEITOR RFID ===");
+    byte version = mfrc522->PCD_ReadRegister(MFRC522::VersionReg);
+    DEBUG_PRINTF("Versão do chip: 0x%02X\n", version);
+    
+    switch (version) {
+        case 0x91: DEBUG_PRINTLN("Chip: MFRC522 v1.0"); break;
+        case 0x92: DEBUG_PRINTLN("Chip: MFRC522 v2.0"); break;
+        default: DEBUG_PRINTLN("Chip: Desconhecido"); break;
+    }
+    
+    DEBUG_PRINTF("Pino SS: %d\n", RFID_SS_PIN);
+    DEBUG_PRINTF("Pino RST: %d\n", RFID_RST_PIN);
+    DEBUG_PRINTF("Cooldown: %lu ms\n", COOLDOWN_TIME_MS);
+    DEBUG_PRINTF("Master UID: %s\n", MASTER_UID);
+    DEBUG_PRINTLN("=================================\n");
 }

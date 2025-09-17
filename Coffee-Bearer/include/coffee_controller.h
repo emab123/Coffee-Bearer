@@ -29,7 +29,7 @@ struct CoffeeStats {
 
 class CoffeeController {
 private:
-    FeedbackManager* feedbackManager;
+    FeedbackManager& feedbackManager;
     bool systemBusy;
     int remainingCoffees;
     int totalServed;
@@ -44,12 +44,9 @@ private:
     void saveToPreferences();
     void loadFromPreferences();
     void checkDailyReset();
-    void handleTones();
-    
     
 public:
-    CoffeeController();
-    void setFeedbackManager(FeedbackManager* feedback);
+    CoffeeController(FeedbackManager& feedback);
 
     // Inicialização
     bool begin();

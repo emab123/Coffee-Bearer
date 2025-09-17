@@ -2,41 +2,28 @@
 #include "beeps_and_bleeps.h"
 #include <Preferences.h>
 
-CoffeeController::CoffeeController() :
-feedbackManager(nullptr),
-systemBusy(false),
-remainingCoffees(MAX_COFFEES),
-totalServed(0),
-totalServeTime(0),
-lastServed(0),
-dailyCount(0),
-dailyResetTime(0),
-lastSave(0),
-dataChanged(false) {
-}
-
-void CoffeeController::setFeedbackManager(FeedbackManager* feedback) {
-    this->feedbackManager = feedback;
+CoffeeController::CoffeeController(FeedbackManager& feedback) :
+    feedbackManager(feedback),
+    systemBusy(false),
+    remainingCoffees(MAX_COFFEES),
+    totalServed(0),
+    totalServeTime(0),
+    lastServed(0),
+    dailyCount(0),
+    dailyResetTime(0),
+    lastSave(0),
+    dataChanged(false) 
+{
 }
 
 bool CoffeeController::begin() {
-    // Configurar pinos
     pinMode(RELAY_PIN, OUTPUT);
     digitalWrite(RELAY_PIN, LOW);
-    
-    // Carregar dados salvos
     loadFromPreferences();
-    
-    // Verificar reset diário se necessário
     checkDailyReset();
-
-    if (feedbackManager) feedbackManager->signalSuccess();
+    feedbackManager.signalSuccess();
     
     DEBUG_PRINTLN("Coffee Controller inicializado");
-    DEBUG_PRINTF("Cafés restantes: %d/%d\n", remainingCoffees, MAX_COFFEES);
-    DEBUG_PRINTF("Total servido: %d\n", totalServed);
-    DEBUG_PRINTF("Contagem diária: %d\n", dailyCount);
-    
     return true;
 }
 
@@ -59,16 +46,8 @@ void CoffeeController::clearAllData() {
 }
 
 bool CoffeeController::serveCoffee(const String& userName, int* userCredits) {
-    if (systemBusy) {
-        if (feedbackManager) feedbackManager->signalError();
-        return false;
-    }
-    if (remainingCoffees <= 0) {
-        if (feedbackManager) feedbackManager->signalError();
-        return false;
-    }
-    if (userCredits != nullptr && *userCredits <= 0) {
-        if (feedbackManager) feedbackManager->signalError();
+    if (systemBusy || remainingCoffees <= 0 || (userCredits != nullptr && *userCredits <= 0)) {
+        feedbackManager.signalError(); // Now directly calls the correct instance
         return false;
     }
     
@@ -77,7 +56,7 @@ bool CoffeeController::serveCoffee(const String& userName, int* userCredits) {
     }
     
     systemBusy = true;
-    if (feedbackManager) feedbackManager->signalServing(); // ✅ DELEGATE serving sound
+    feedbackManager.signalServing(); // Correctly signals serving start
 
     digitalWrite(RELAY_PIN, HIGH);
     coffeeServeEndTime = millis() + COFFEE_SERVE_TIME_MS;
@@ -87,24 +66,16 @@ bool CoffeeController::serveCoffee(const String& userName, int* userCredits) {
 
 void CoffeeController::refillContainer() {
     DEBUG_PRINTLN("Reabastecendo recipiente de café...");
-    
     remainingCoffees = MAX_COFFEES;
     dataChanged = true;
-    
-    if (feedbackManager) feedbackManager->signalRefill();
-    
+    feedbackManager.signalRefill();
     DEBUG_PRINTF("Recipiente reabastecido! Cafés disponíveis: %d\n", remainingCoffees);
 }
 
 void CoffeeController::emergencyStop() {
-    DEBUG_PRINTLN("PARADA DE EMERGÊNCIA ATIVADA!");
-    
     digitalWrite(RELAY_PIN, LOW);
-    
     systemBusy = false;
-    
-    if (feedbackManager) feedbackManager->signalError();
-    
+    feedbackManager.signalError();
     DEBUG_PRINTLN("Sistema de café parado com segurança");
 }
 
@@ -207,25 +178,18 @@ unsigned long CoffeeController::getServeTime() {
 void CoffeeController::maintenance() {
     if (systemBusy && millis() >= coffeeServeEndTime) {
         digitalWrite(RELAY_PIN, LOW);
-        DEBUG_PRINTLN("Relé desativado - café pronto!");
-
-        // Update stats now that it's finished
         remainingCoffees--;
         totalServed++;
         dailyCount++;
         lastServed = millis();
         dataChanged = true;
-
-         if (feedbackManager) feedbackManager->signalSuccess();
-        systemBusy = false; // System is now free
-
+        feedbackManager.signalSuccess();
+        systemBusy = false;
         DEBUG_PRINTF("Café servido com sucesso! Restam: %d\n", remainingCoffees);
     }
     
-    // Check daily reset
     checkDailyReset();
     
-    // Save data if necessary
     if (dataChanged && (millis() - lastSave > DATA_SAVE_INTERVAL_MS)) {
         saveToPreferences();
     }

@@ -1,10 +1,11 @@
 #include "web_server.h"
 
 extern RFIDManager rfidManager;
+extern FeedbackManager feedbackManager; // ADD THIS EXTERN
 
 // Constructor
-WebServerManager::WebServerManager(AuthManager &auth, Logger &log, UserManager &users, CoffeeController &coffee)
-    : server(80), ws("/ws"), authManager(auth), logger(log), userManager(users), coffeeController(coffee) {}
+WebServerManager::WebServerManager(AuthManager &auth, Logger &log, UserManager &users, CoffeeController &coffee, FeedbackManager &feedback)
+    : server(80), ws("/ws"), authManager(auth), logger(log), userManager(users), coffeeController(coffee), feedbackManager(feedback) {}
 
 void WebServerManager::begin() {
     if (!SPIFFS.begin(true)) {
@@ -141,7 +142,50 @@ void WebServerManager::setupApiRoutes() {
         serializeJson(doc, json);
         req->send(200, "application/json", json);
     });
+    
+    // --- LED Brightness Endpoint ---
+    AsyncCallbackJsonWebHandler* ledHandler = new AsyncCallbackJsonWebHandler("/api/led/brightness", [this](AsyncWebServerRequest *request, JsonVariant &json) {
+        if (!this->authManager.isAuthenticated(request, ROLE_ADMIN)) {
+            request->send(403, "application/json", "{\"error\":\"Forbidden\"}");
+            return;
+        }
 
+        JsonObject jsonObj = json.as<JsonObject>();
+        if (jsonObj.containsKey("brightness")) {
+            uint8_t brightness = jsonObj["brightness"];
+            this->feedbackManager.setBrightness(brightness);
+            request->send(200, "application/json", "{\"success\":true}");
+        } else {
+            request->send(400, "application/json", "{\"success\":false, \"message\":\"Missing brightness value\"}");
+        }
+    });
+    server.addHandler(ledHandler);
+    
+    AsyncCallbackJsonWebHandler* systemSettingsHandler = new AsyncCallbackJsonWebHandler("/api/system/settings", [this](AsyncWebServerRequest *request, JsonVariant &json) {
+        if (!this->authManager.isAuthenticated(request, ROLE_ADMIN)) {
+            request->send(403, "application/json", "{\"error\":\"Forbidden\"}");
+            return;
+        }
+
+        JsonObject jsonObj = json.as<JsonObject>();
+        
+        // You can now access the values sent from the form
+        if (jsonObj.containsKey("logLevel")) {
+            int logLevel = jsonObj["logLevel"];
+            // Example: logger.setMinimumLevel((LogLevel)logLevel);
+            Serial.printf("Received new log level: %d\n", logLevel);
+        }
+        if (jsonObj.containsKey("timezone")) {
+            int timezone = jsonObj["timezone"];
+            // Example: timeClient.setTimeOffset(timezone * 3600);
+            Serial.printf("Received new timezone offset: %d\n", timezone);
+        }
+        
+        // For now, just send a success response
+        request->send(200, "application/json", "{\"success\":true, \"message\":\"Settings received\"}");
+    });
+    server.addHandler(systemSettingsHandler);
+    
     // --- User Management Endpoint ---
     
     // GET /api/users - List all users
@@ -206,6 +250,7 @@ void WebServerManager::setupApiRoutes() {
         String json = this->logger.getLogsAsJson(limit);
         req->send(200, "application/json", "{\"logs\":" + json + "}");
     });
+    
 }
 
 

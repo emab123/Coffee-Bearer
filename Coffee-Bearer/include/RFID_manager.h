@@ -49,10 +49,10 @@ private:
     bool initialized;
     
     // Referências para outros managers
-    UserManager* userManager;
-    CoffeeController* coffeeController;
-    FeedbackManager feedbackManager;
-    Logger* logger;
+    UserManager& userManager;
+    CoffeeController& coffeeController;
+    FeedbackManager& feedbackManager;
+    Logger& logger;
     ScanMode currentMode;
     
     String readUID();
@@ -61,11 +61,9 @@ private:
     RFIDResult processNormalUser(const String& uid);
     void processMasterKey();
     void handleRFIDResult(const String& uid, const String& userName, RFIDResult result);
-    void playResultSound(RFIDResult result);
-    void showResultLED(RFIDResult result);
     
 public:
-    RFIDManager();
+    RFIDManager(UserManager& users, CoffeeController& coffee, Logger& log, FeedbackManager& feedback);
     ~RFIDManager();
     
     // Inicialização

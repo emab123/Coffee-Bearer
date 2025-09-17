@@ -44,6 +44,11 @@ CONFIGURAÇÕES CENTRALIZADAS DO SISTEMA
     #warning "ATENCAO: Defina WIFI_SSID e WIFI_PASSWORD em seu arquivo credentials.h"
 #endif
 
+// Nome do host mDNS (pode ser sobrescrito em credentials.h)
+#ifndef MDNS_HOSTNAME
+    #define MDNS_HOSTNAME "coffeebearer"
+#endif
+
 // Servidor NTP e fuso horário (podem ser sobrescritos em credentials.h)
 #ifndef NTP_SERVER
 #define NTP_SERVER "pool.ntp.org"
@@ -59,7 +64,7 @@ CONFIGURAÇÕES CENTRALIZADAS DO SISTEMA
 // ============== CONFIGURAÇÕES DO SISTEMA ==============
 // Limites
 #define MAX_USERS 50
-#define MAX_COFFEES 100
+#define MAX_COFFEES 10
 #define INITIAL_CREDITS 10
 #define COFFEE_SERVE_TIME_MS 8000
 #define COOLDOWN_TIME_MS 3000

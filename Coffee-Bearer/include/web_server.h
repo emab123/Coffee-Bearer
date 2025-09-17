@@ -16,7 +16,7 @@ class CoffeeController;
 
 class WebServerManager {
 public:
-    WebServerManager(AuthManager &auth, Logger &log, UserManager &users, CoffeeController &coffee);
+    WebServerManager(AuthManager &auth, Logger &log, UserManager &users, CoffeeController &coffee, FeedbackManager &feedback);
 
     void begin();
 
@@ -34,6 +34,7 @@ private:
     Logger &logger;
     UserManager &userManager;
     CoffeeController &coffeeController;
+    FeedbackManager &feedbackManager; // ADD THIS LINE
     
     void setupStaticRoutes();
     void sendHtmlFile(AsyncWebServerRequest* req, const String& baseDir, const String& page);
